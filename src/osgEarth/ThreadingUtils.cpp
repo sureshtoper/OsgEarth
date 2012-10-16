@@ -36,6 +36,8 @@ unsigned osgEarth::Threading::getCurrentThreadId()
 
 #ifdef _WIN32
         return (unsigned)::GetCurrentThreadId();
+#elif ANDROID
+        return (unsigned)::gettid();
 #else
         return (unsigned)::syscall(SYS_gettid);
 #endif
