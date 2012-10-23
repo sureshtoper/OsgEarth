@@ -62,6 +62,9 @@ ADD_SUBDIRECTORY(osgearth_tfs)
 ADD_SUBDIRECTORY(osgearth_contour)
 ADD_SUBDIRECTORY(osgearth_verticalscale)
 
+ADD_SUBDIRECTORY(osgearth_simplesim)
+ADD_SUBDIRECTORY(osgearth_stealthviewer)
+
 IF(NOT ${OPENSCENEGRAPH_VERSION} VERSION_LESS "3.1.0")
     ADD_SUBDIRECTORY(osgearth_shadow)
 ENDIF()
