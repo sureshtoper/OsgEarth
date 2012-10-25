@@ -96,30 +96,32 @@ struct MyGraphicsContext
 #define SAYBOOL(X) (X?"yes":"no")
 
 Capabilities::Capabilities() :
-_maxFFPTextureUnits     ( 1 ),
-_maxGPUTextureUnits     ( 1 ),
-_maxGPUTextureCoordSets ( 1 ),
-_maxTextureSize         ( 256 ),
-_maxFastTextureSize     ( 256 ),
+_maxFFPTextureUnits     ( 1 ),//1
+_maxGPUTextureUnits     ( 8 ),//1
+_maxGPUTextureCoordSets ( 11 ),//1
+_maxTextureSize         ( 2048 ),//256
+_maxFastTextureSize     ( 2048 ),//256
 _maxLights              ( 1 ),
-_depthBits              ( 0 ),
-_supportsGLSL           ( false ),
+_depthBits              ( 24 ),//0
+_supportsGLSL           ( true ),//false
 _GLSLversion            ( 1.0f ),
 _supportsTextureArrays  ( false ),
-_supportsMultiTexture   ( false ),
-_supportsStencilWrap    ( true ),
+_supportsMultiTexture   ( true ),//false
+_supportsStencilWrap    ( false ),//true
 _supportsTwoSidedStencil( false ),
 _supportsTexture2DLod   ( false ),
 _supportsMipmappedTextureUpdates( false ),
 _supportsDepthPackedStencilBuffer( false ),
 _supportsOcclusionQuery ( false ),
 _supportsDrawInstanced  ( false ),
-_supportsUniformBufferObjects( false ),
+_supportsUniformBufferObjects( true ),
 _maxUniformBlockSize    ( 0 )
 {
     // little hack to force the osgViewer library to link so we can create a graphics context
     osgViewerGetVersion();
-
+    
+    OSG_ALWAYS << "Capabilities v1" << std::endl;
+    
     // check the environment in order to disable ATI workarounds
     bool enableATIworkarounds = true;
     if ( ::getenv( "OSGEARTH_DISABLE_ATI_WORKAROUNDS" ) != 0L )

@@ -53,7 +53,7 @@ namespace
     bool s_mergeShaders = false;
 #endif
 
-    bool s_dumpShaders = false;        // debugging
+    bool s_dumpShaders = true;        // debugging
 
     /** A hack for OSG 2.8.x to get access to the state attribute vector. */
     /** TODO: no longer needed in OSG 3+ ?? */
