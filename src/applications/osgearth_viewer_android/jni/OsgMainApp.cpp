@@ -108,6 +108,11 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     ::setenv("OSGEARTH_HTTP_DEBUG", "1", 1);
     ::setenv("OSGEARTH_DUMP_SHADERS", "1", 1);
     
+    osgEarth::Registry::instance()->setDefaultTerrainEngineDriverName("quadtree");
+    
+    _bufferWidth = width;
+    _bufferHeight = height;
+    
     _viewer = new osgViewer::Viewer();
     _viewer->setUpViewerAsEmbeddedInWindow(x, y, width, height);
     _viewer->getCamera()->setViewport(new osg::Viewport(0, 0, width, height));
@@ -120,6 +125,7 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     _viewer->getCamera()->setNearFarRatio(0.00002);
     _viewer->setThreadingModel(osgViewer::ViewerBase::SingleThreaded);
 
+    _viewer->getEventQueue()->getCurrentEventState()->setMouseYOrientation(osgGA::GUIEventAdapter::Y_INCREASING_UPWARDS);
 
     // install our default manipulator (do this before calling load)
     _viewer->setCameraManipulator( new osgEarth::Util::EarthMultiTouchManipulator() );
@@ -136,7 +142,7 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     material->setSpecular(osg::Material::FRONT, osg::Vec4(0.4,0.4,0.4,1.0));
     
     
-    osg::Node* node = osgDB::readNodeFile("/storage/sdcard0/Download/tests/gdal_tiff.earth");//readymap.earth");
+    osg::Node* node = osgDB::readNodeFile("/storage/sdcard0/Download/tests/readymap.earth");
     if ( !node )
     {
         OSG_ALWAYS << "Unable to load an earth file from the command line." << std::endl;
@@ -166,87 +172,21 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     root->getOrCreateStateSet()->setAttribute(material);
     //root->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
     
-    /*double hours = 12.0f;
+    double hours = 12.0f;
     float ambientBrightness = 0.4f;
     osgEarth::Util::SkyNode* sky = new osgEarth::Util::SkyNode( mapNode->getMap() );
     sky->setAmbientBrightness( ambientBrightness );
     sky->setDateTime( 1984, 11, 8, hours );
     sky->attach( _viewer, 0 );
-    root->addChild( sky );*/
-    
-    
-    
-    //add model
-    unsigned int numObjects = 2;
-     osg::Group* treeGroup = new osg::Group();
-     root->addChild(treeGroup);
-     osg::Node* tree = osgDB::readNodeFile("/storage/sdcard0/Download/data/boxman.osg");
-     osg::MatrixTransform* mt = new osg::MatrixTransform();
-     mt->setMatrix(osg::Matrixd::scale(100000,100000,100000));
-     mt->addChild( tree );
-     //Create bound around mt rainer
-     double centerLat =  46.840866;
-     double centerLon = -121.769846;
-     double gheight = 0.2;
-     double gwidth = 0.2;
-     double minLat = centerLat - (height/2.0);
-     double minLon = centerLon - (width/2.0);
-     
-     OE_NOTICE << "Placing " << numObjects << " trees" << std::endl;
-     
-     for (unsigned int i = 0; i < numObjects; i++)
-     {
-     osgEarth::Util::ObjectLocatorNode* locator = new osgEarth::Util::ObjectLocatorNode( mapNode->getMap() );
-     double lat = minLat + gheight * (rand() * 1.0)/(RAND_MAX-1);
-     double lon = minLon + gwidth * (rand() * 1.0)/(RAND_MAX-1);
-     //OE_NOTICE << "Placing tree at " << lat << ", " << lon << std::endl;
-     locator->getLocator()->setPosition(osg::Vec3d(lon,  lat, 0 ) );
-     locator->addChild( mt );
-     treeGroup->addChild( locator );
-     mapNode->getTerrain()->addTerrainCallback( new ClampObjectLocatorCallback(locator) );
-     }
-    //attach a UpdateLightingUniformsHelper to the model
-    UpdateLightingUniformsHelper* updateLightInfo = new UpdateLightingUniformsHelper();
-    treeGroup->setCullCallback(updateLightInfo);
-    
-    osgUtil::GLES2ShaderGenVisitor shaderGen;
-    treeGroup->accept(shaderGen);
-    root->accept(shaderGen);
-    
+    root->addChild( sky );
+        
     
     //for some reason we have to do this as global stateset doesn't
     //appear to be in the statesetstack
     root->getOrCreateStateSet()->setAttribute(_viewer->getLight());
     
     _viewer->setSceneData( root );
-    
-    // create the map.
-    Map* map = new Map();
-    
-    // add a TMS imager layer:
-    TMSOptions imagery;
-    imagery.url() = "http://readymaps.org/readymap/tiles/1.0.0/7/";
-    map->addImageLayer( new ImageLayer("Imagery", imagery) );
-    /*
-    // add a TMS elevation layer:
-    TMSOptions elevation;
-    elevation.url() = "http://readymap.org/readymap/tiles/1.0.0/9/";
-    map->addElevationLayer( new ElevationLayer("Elevation", elevation) );
-    
-    */
-    
-    // make the map scene graph:
-    MapNode* mapn = new MapNode( map );
-    _viewer->setSceneData( mapn );
 
-    osgDB::writeNodeFile(*mapn, "/storage/sdcard0/Download/mapnode.osgt");
-    
-    if(Registry::capabilities().supportsGLSL()){
-        OSG_ALWAYS << "GLSL is Supported" << std::endl;
-    }else{
-        OSG_ALWAYS << "GLSL is NOT Supported" << std::endl;
-    }
-    
     _viewer->realize();
 
     _initialized = true;
@@ -256,20 +196,55 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
 void OsgMainApp::draw(){
 
     _viewer->frame();
+    
+    //clear events for next frame
+    _frameTouchBeganEvents = NULL;
+    _frameTouchMovedEvents = NULL;
+    _frameTouchEndedEvents = NULL;
 }
 //Events
-void OsgMainApp::mouseButtonPressEvent(float x,float y,int button){
-    _viewer->getEventQueue()->mouseButtonPress(x, y, button);
+static bool flipy = true;
+void OsgMainApp::touchBeganEvent(int touchid,float x,float y){
+    if (!_frameTouchBeganEvents.valid()) {
+        if(_viewer.valid()){
+            _frameTouchBeganEvents = _viewer->getEventQueue()->touchBegan(touchid, osgGA::GUIEventAdapter::TOUCH_BEGAN, x, flipy ? _bufferHeight-y : y);
+        }
+    } else {
+        _frameTouchBeganEvents->addTouchPoint(touchid, osgGA::GUIEventAdapter::TOUCH_BEGAN, x, flipy ? _bufferHeight-y : y);
+    }
 }
-void OsgMainApp::mouseButtonReleaseEvent(float x,float y,int button){
-    _viewer->getEventQueue()->mouseButtonRelease(x, y, button);
+void OsgMainApp::touchMovedEvent(int touchid,float x,float y){
+    if (!_frameTouchMovedEvents.valid()) {
+        if(_viewer.valid()){
+            _frameTouchMovedEvents = _viewer->getEventQueue()->touchMoved(touchid, osgGA::GUIEventAdapter::TOUCH_MOVED, x, flipy ? _bufferHeight-y : y);
+        }
+    } else {
+        _frameTouchMovedEvents->addTouchPoint(touchid, osgGA::GUIEventAdapter::TOUCH_MOVED, x, flipy ? _bufferHeight-y : y);
+    }
 }
-void OsgMainApp::mouseMoveEvent(float x,float y){
-    _viewer->getEventQueue()->mouseMotion(x, y);
+void OsgMainApp::touchEndedEvent(int touchid,float x,float y,int tapcount){
+    if (!_frameTouchEndedEvents.valid()) {
+        if(_viewer.valid()){
+            _frameTouchEndedEvents = _viewer->getEventQueue()->touchEnded(touchid, osgGA::GUIEventAdapter::TOUCH_ENDED, x, flipy ? _bufferHeight-y : y,tapcount);
+        }
+    } else {
+        _frameTouchEndedEvents->addTouchPoint(touchid, osgGA::GUIEventAdapter::TOUCH_ENDED, x, flipy ? _bufferHeight-y : y,tapcount);
+    }
 }
 void OsgMainApp::keyboardDown(int key){
     _viewer->getEventQueue()->keyPress(key);
 }
 void OsgMainApp::keyboardUp(int key){
     _viewer->getEventQueue()->keyRelease(key);
+}
+
+void OsgMainApp::clearEventQueue()
+{
+    //clear our groups
+    _frameTouchBeganEvents = NULL;
+    _frameTouchMovedEvents = NULL;
+    _frameTouchEndedEvents = NULL;
+    
+    //clear the viewers queue
+    _viewer->getEventQueue()->clear();
 }
