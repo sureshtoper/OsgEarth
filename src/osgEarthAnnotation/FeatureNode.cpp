@@ -31,6 +31,7 @@
 #include <osgEarth/NodeUtils>
 #include <osgEarth/Utils>
 #include <osgEarth/Registry>
+#include <osgEarth/ShaderGenerator>
 
 #include <osg/BoundingSphere>
 #include <osg/Polytope>
@@ -130,6 +131,10 @@ FeatureNode::init()
                 setLightingIfNotSet( _feature->style()->has<ExtrusionSymbol>() );
 
                 clampMesh( getMapNode()->getTerrain()->getGraph() );
+            }
+            else
+            {
+                setAutoClamp( false );
             }
         }
     }

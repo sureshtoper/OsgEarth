@@ -61,6 +61,9 @@ _activeDs   ( 0L )
     //nop
     //Note: Cannot call setMapNode() here because it's a virtual function.
     //      Each subclass will be separately responsible at ctor time.
+
+    // always blend.
+    this->getOrCreateStateSet()->setMode( GL_BLEND, osg::StateAttribute::ON );
 }
 
 AnnotationNode::AnnotationNode(MapNode* mapNode, const Config& conf) :
@@ -322,6 +325,7 @@ AnnotationNode::clearDecoration()
     {
         this->accept(_activeDs, false);
         _activeDs = 0L;
+        _activeDsName = "";
     }
 }
 
