@@ -100,13 +100,13 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     osg::setNotifyHandler(_notifyHandler);
     osgEarth::setNotifyHandler(_notifyHandler);
     
-    osg::setNotifyLevel(osg::FATAL);
-    osgEarth::setNotifyLevel(osg::INFO);
+    osg::setNotifyLevel(osg::INFO);
+    osgEarth::setNotifyLevel(osg::FATAL);
 
     osg::notify(osg::ALWAYS)<<"Testing"<<std::endl;
 
-    ::setenv("OSGEARTH_HTTP_DEBUG", "1", 1);
-    ::setenv("OSGEARTH_DUMP_SHADERS", "1", 1);
+    //::setenv("OSGEARTH_HTTP_DEBUG", "1", 1);
+    //::setenv("OSGEARTH_DUMP_SHADERS", "1", 1);
     
     osgEarth::Registry::instance()->setDefaultTerrainEngineDriverName("quadtree");
     
