@@ -37,6 +37,8 @@
 #include <osgViewer/ViewerEventHandlers>
 #include <osgGA/StateSetManipulator>
 
+#include <osgEarthSim/DISListener>
+
 #include <OpenThreads/Thread>
 
 #include "KDIS/Extras/DIS_Logger_Record.h"
@@ -52,6 +54,7 @@ using namespace UTILS;
 using namespace NETWORK;
 
 using namespace osgEarth;
+using namespace osgEarth::Sim;
 using namespace osgEarth::Util;
 using namespace osgEarth::Util::Controls;
 using namespace osgEarth::Annotation;
@@ -185,92 +188,6 @@ private:
     Entity_State_PDU* _state;
 };
 
-
-class DISListener : public OpenThreads::Thread
-{       
-public:
-    DISListener():
-      _done(false)
-      {
-      }
-
-      virtual ~DISListener()
-      {
-          cancel();
-      }
-
-      virtual void run()
-      {                    
-          // Note this address will probably be different for your network.
-          //Connection conn( "224.0.0.1", 3000, true, false );
-          Connection conn( "192.168.1.255", 3000);
-
-          KOCTET cBuffer[MAX_PDU_SIZE]; // Somewhere to store the data we receive.
-
-          PDU_Factory factory;
-          //factory.AddFilter( new FactoryFilterExerciseID( 1 ) );
-
-
-          while (!_done)
-          {
-              try
-              {                  
-                  KINT32 i32Recv = 0;
-
-                  i32Recv = conn.Receive( cBuffer, MAX_PDU_SIZE );
-                  if (i32Recv > 0)
-                  {                      
-                      KDataStream s( cBuffer, i32Recv );
-
-                      //If the PDU didn't match our filters, then we 
-                      auto_ptr< Header > pHeader = factory.Decode( s );
-                      if (!pHeader.get())
-                      {                          
-                          continue;
-                      }
-
-                      //Take owner ship of this PDU                      
-                      Entity_State_PDU* entityState = dynamic_cast<Entity_State_PDU*>(pHeader.get());
-                      if (entityState)
-                      {
-                          //Take ownership of this pdu
-                          pHeader.release();
-                          onEntityStateChanged( entityState );
-                      }                      
-                  }                  
-              }
-              catch( std::exception & e )
-              {
-                  std::cout << e.what() << std::endl;
-              } 
-          }
-      }
-
-      virtual int
-          cancel()
-      {
-          if ( isRunning() )
-          {
-              _done = true;  
-
-              while( isRunning() )
-              {        
-                  OpenThreads::Thread::YieldCurrentThread();
-              }
-          }
-          return 0;
-      }
-      
-      virtual void onEntityStateChanged( Entity_State_PDU* entityState )
-      {
-          //OE_NOTICE << "Entity state changed " << id << ":   " << lat << ", " << lon << ", " << alt << " marker=" << marker << " force=" << forceId << std::endl;
-      }
-
-private:
-
-    volatile bool _done;
-};
-
 typedef std::map< int, osg::ref_ptr< TrackNode > > TrackNodeMap;
 
 typedef std::map< int, osg::ref_ptr< EntityRecord >> EntityRecords;
@@ -319,10 +236,6 @@ public:
 IconFactory s_iconFactory;
 
 
-
-static int numMessages = 0;
-
-
 class Simulation : public DISListener, public osg::Referenced
 {
 public:
@@ -336,18 +249,12 @@ public:
     {
     }
 
-    /*virtual void onEntityStateChanged(int id,
-                                      double lat, double lon, double alt,
-                                      const std::string& marker, ForceID forceId)
-                                      */
     virtual void onEntityStateChanged( Entity_State_PDU* entityState )
     {
-        OpenThreads::ScopedLock< OpenThreads::Mutex > lk( _mutex );
-        numMessages++;
+        OpenThreads::ScopedLock< OpenThreads::Mutex > lk( _mutex );        
         double t = osg::Timer::instance()->time_s();
         //Initialize the dead reckoning on the entity
-        entityState->InitDeadReckoning();        
-        OE_NOTICE << "Messages=" << numMessages << " Rate=" << (double)numMessages / t << " msg/s" << std::endl;
+        entityState->InitDeadReckoning();                
 
         int id = entityState->GetEntityIdentifier().GetEntityID();
         ForceID forceId = entityState->GetForceID();
@@ -366,7 +273,7 @@ public:
         {
             //Create a new entity record
 
-            OE_NOTICE << "Adding new entity " << id << std::endl;
+            //OE_NOTICE << "Adding new entity " << id << std::endl;
             // build a track field schema.
             TrackNodeFieldSchema schema;
             createFieldSchema( schema );
@@ -531,7 +438,5 @@ main(int argc, char** argv)
     {
         simulation->updateSim();
         viewer.frame();
-    }
-
-    //viewer.run();
+    }    
 }

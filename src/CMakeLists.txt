@@ -3,7 +3,7 @@ FOREACH( lib
          osgEarth
          osgEarthAnnotation
          osgEarthFeatures
-         osgEarthUtil
+         osgEarthUtil         
          osgEarthSymbology )
 
     ADD_SUBDIRECTORY(${lib})
@@ -18,6 +18,11 @@ ADD_SUBDIRECTORY( applications )
 IF (QT4_FOUND AND NOT ANDROID AND OSGEARTH_USE_QT)
     ADD_SUBDIRECTORY(osgEarthQt)
     SET_PROPERTY(TARGET osgEarthQt PROPERTY FOLDER "Libs")
+ENDIF()
+
+IF (KDIS_FOUND)
+   ADD_SUBDIRECTORY(osgEarthSim)
+   SET_PROPERTY(TARGET osgEarthSim PROPERTY FOLDER "Libs")
 ENDIF()
 
 IF(MSVC80)

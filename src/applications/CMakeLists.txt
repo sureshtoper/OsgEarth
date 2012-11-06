@@ -17,10 +17,12 @@ SET(OPENSCENEGRAPH_APPLICATION_DIR ${PROJECT_SOURCE_DIR})
 SET(TARGET_COMMON_LIBRARIES
     osgEarth
     osgEarthFeatures
-    osgEarthUtil
+    osgEarthUtil    
     osgEarthSymbology
-    osgEarthAnnotation
+    osgEarthSim
+    osgEarthAnnotation    
 )
+
 
 SET(TARGET_DEFAULT_PREFIX "application_")
 SET(TARGET_DEFAULT_APPLICATION_FOLDER "Applications")
@@ -70,8 +72,10 @@ ADD_SUBDIRECTORY(osgearth_colorfilter)
 ADD_SUBDIRECTORY(osgearth_contour)
 ADD_SUBDIRECTORY(osgearth_verticalscale)
 
-ADD_SUBDIRECTORY(osgearth_simplesim)
-ADD_SUBDIRECTORY(osgearth_stealthviewer)
+IF (KDIS_FOUND)
+    ADD_SUBDIRECTORY(osgearth_simplesim)
+    ADD_SUBDIRECTORY(osgearth_stealthviewer)
+ENDIF()
 
 IF(NOT ${OPENSCENEGRAPH_VERSION} VERSION_LESS "3.1.0")
     ADD_SUBDIRECTORY(osgearth_shadow)
