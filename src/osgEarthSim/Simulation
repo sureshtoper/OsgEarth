@@ -54,7 +54,7 @@ namespace osgEarth { namespace Sim {
 
     typedef std::map< int, osg::ref_ptr< TrackNode > > TrackNodeMap;
 
-    typedef std::map< int, osg::ref_ptr< EntityRecord >> EntityRecords;
+    typedef std::map< int, osg::ref_ptr< EntityRecord > > EntityRecords;
 
 
     /***************************************************************************/
