@@ -1,0 +1,63 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+* Copyright 2008-2012 Pelican Mapping
+* http://osgearth.org
+*
+* osgEarth is free software; you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>
+*/
+#ifndef OSGEARTHSIM_ICONFACTORY_H
+#define OSGEARTHSIM_ICONFACTORY_H 1
+
+#include <osgEarthSim/Common>
+
+#include <osg/Image>
+
+#include <KDIS/DataTypes/Enums/EnumEntityInfoInteraction.h>
+
+using namespace KDIS::DATA_TYPE::ENUMS;
+
+namespace osgEarth { namespace Sim {
+
+    class OSGEARTHSIM_EXPORT IconFactory : public osg::Referenced
+    {
+    public:
+        IconFactory(); 
+        IconFactory(int iconSize,
+                    const std::string& friendly,
+                    const std::string& opposing,
+                    const std::string& neutral,
+                    const std::string& unknown
+                    ); 
+
+        int getIconSize() const;        
+
+        osg::Image* getIcon(ForceID forceId );
+
+    private:
+
+        void load( const std::string& friendly,
+                   const std::string& opposing,
+                   const std::string& neutral,
+                   const std::string& unknown);
+
+        int _iconSize;
+
+        osg::ref_ptr< osg::Image > _friendly;
+        osg::ref_ptr< osg::Image > _opposing;
+        osg::ref_ptr< osg::Image > _neutral;
+        osg::ref_ptr< osg::Image > _unknown;        
+    };
+}}
+
+#endif //OSGEARTHSIM_ICONFACTORY_H

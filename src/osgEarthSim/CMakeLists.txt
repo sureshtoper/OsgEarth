@@ -10,11 +10,15 @@ SET(HEADER_PATH ${OSGEARTH_SOURCE_DIR}/include/${LIB_NAME})
 SET(LIB_PUBLIC_HEADERS    
     Common
     DISListener
+    IconFactory
+    Simulation
 )
 
 ADD_LIBRARY(${LIB_NAME} ${OSGEARTH_USER_DEFINED_DYNAMIC_OR_STATIC}
     ${LIB_PUBLIC_HEADERS}
     DISListener.cpp
+    IconFactory.cpp
+    Simulation.cpp
 )
 
 INCLUDE_DIRECTORIES(${KDIS_INCLUDE_DIR} )
