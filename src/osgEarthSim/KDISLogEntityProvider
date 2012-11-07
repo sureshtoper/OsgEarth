@@ -1,0 +1,69 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+* Copyright 2008-2012 Pelican Mapping
+* http://osgearth.org
+*
+* osgEarth is free software; you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>
+*/
+
+#ifndef OSGEARTHSIM_KDISLOGENTITYPROVIDER_H
+#define OSGEARTHSIM_KDISLOGENTITYPROVIDER_H 1
+
+#include <osgEarthSim/Common>
+
+#include <osgEarthSim/EntityProvider>
+#include <OpenThreads/Thread>
+
+#include "KDIS/Extras/DIS_Logger_Playback.h"
+#include "KDIS/Extras/PDU_Factory.h"
+#include "KDIS/PDU/Entity_Info_Interaction/Entity_State_PDU.h"
+
+
+
+namespace osgEarth { namespace Sim {
+
+    using namespace KDIS;
+    using namespace DATA_TYPE;
+    using namespace PDU;
+    using namespace ENUMS;
+    using namespace UTILS;    
+
+
+    class OSGEARTHSIM_EXPORT KDISLogEntityProvider  : public EntityProvider, public OpenThreads::Thread
+    {       
+    public:
+        KDISLogEntityProvider(const std::string &filename="Log.txt");
+        virtual ~KDISLogEntityProvider();
+
+        virtual void startImplementation();
+        virtual void stopImplementation();
+
+        bool getLoop() const { return _loop;}
+        void setLoop( bool loop) { _loop = loop; }
+
+        const std::string& getFilename() const { return _filename; }
+
+        virtual void run();      
+        virtual int cancel();              
+
+    private:
+
+        std::string _filename;        
+        volatile bool _done;
+        bool _loop;
+    };
+
+}}
+
+#endif //OSGEARTHSIM_KDISLOGENTITYPROVIDER_H

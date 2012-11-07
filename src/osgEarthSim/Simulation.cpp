@@ -88,12 +88,19 @@ void EntityRecord::setEntityState(Entity_State_PDU* state)
 
 /***************************************************************************/
 
-Simulation::Simulation(MapNode* mapNode, osg::Group* entityGroup, IconFactory* iconFactory):
+Simulation::Simulation(MapNode* mapNode, osg::Group* entityGroup, EntityProvider* provider, IconFactory* iconFactory):
 _mapNode( mapNode ),
 _entityGroup( entityGroup ),
+_provider( provider ),
 _iconFactory( iconFactory ),
 _entityTimeout(-1.0)
 {        
+    //Attach ourselves the entity provider
+    if (_provider.valid())
+    {
+        _provider->getCallbacks().push_back( this );
+    }
+
     //Create an IconFactory if we weren't given one
     if (!_iconFactory.valid())
     {
@@ -103,6 +110,11 @@ _entityTimeout(-1.0)
 
 Simulation::~Simulation()
 {
+    //Detach from the entity provider
+    if (_provider.valid())
+    {
+        _provider->getCallbacks().remove( this );
+    }
 }
 
 void

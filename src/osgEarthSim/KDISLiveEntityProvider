@@ -16,14 +16,14 @@
 * You should have received a copy of the GNU Lesser General Public License
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
-#ifndef OSGEARTHSIM_DISLISTENER_H
-#define OSGEARTHSIM_DISLISTENER_H 1
+#ifndef OSGEARTHSIM_KDISLIVEENTITYPROVIDER_H
+#define OSGEARTHSIM_KDISLIVEENTITYPROVIDER_H 1
 
 #include <osgEarthSim/Common>
 
+#include <osgEarthSim/EntityProvider>
 #include <OpenThreads/Thread>
 
-#include "KDIS/Extras/DIS_Logger_Record.h"
 #include "KDIS/Network/Connection.h" // A cross platform connection class.
 #include "KDIS/Extras/PDU_Factory.h"
 #include "KDIS/PDU/Entity_Info_Interaction/Entity_State_PDU.h"
@@ -40,23 +40,31 @@ namespace osgEarth { namespace Sim {
     using namespace NETWORK;
 
 
-    class OSGEARTHSIM_EXPORT DISListener  : public OpenThreads::Thread
+    /**
+     * Provides entities from a live running DIS simulation
+     */
+    class OSGEARTHSIM_EXPORT KDISLiveEntityProvider  : public EntityProvider, public OpenThreads::Thread
     {       
     public:
-        DISListener();
-        virtual ~DISListener();
+        KDISLiveEntityProvider(const std::string &ip="192.168.1.255", int port=3000);
+        virtual ~KDISLiveEntityProvider();
+
+        virtual void startImplementation();
+        virtual void stopImplementation();
+
+        const std::string& getIP() const { return _ip; }
+        int getPort() const { return _port;}
 
         virtual void run();      
-
-        virtual int cancel();      
-
-        virtual void onEntityStateChanged( Entity_State_PDU* entityState );
+        virtual int cancel();              
 
     private:
 
+        std::string _ip;
+        int _port;
         volatile bool _done;
     };
 
 }}
 
-#endif //OSGEARTHSIM_DISLISTENER_H
+#endif //OSGEARTHSIM_KDISLIVEENTITYPROVIDER_H

@@ -17,30 +17,31 @@
 * along with this program.  If not, see <http://www.gnu.org/licenses/>
 */
 
-#include <osgEarthSim/DISListener>
+#include <osgEarthSim/KDISLiveEntityProvider>
 
 #include <osgEarth/Notify>
 
 using namespace osgEarth::Sim;
 
-DISListener::DISListener():
-_done(false)
+KDISLiveEntityProvider::KDISLiveEntityProvider(const std::string &ip, int port):
+_done(false),
+_ip( ip ),
+_port( port )
 {
 }
 
-DISListener::~DISListener()
+KDISLiveEntityProvider::~KDISLiveEntityProvider()
 {
     cancel();
 }
 
-void DISListener::run()
+void KDISLiveEntityProvider::run()
 {                    
-    // Note this address will probably be different for your network.
-    //Connection conn( "224.0.0.1", 3000, true, false );
-    Connection conn( "192.168.1.255", 3000);
+    Connection conn( _ip, _port);
 
     KOCTET cBuffer[MAX_PDU_SIZE]; // Somewhere to store the data we receive.
 
+    //We can filter based on exercise ID using a single filter like this.
     PDU_Factory factory;
     //factory.AddFilter( new FactoryFilterExerciseID( 1 ) );
 
@@ -80,7 +81,7 @@ void DISListener::run()
     }
 }
 
-int DISListener::cancel()
+int KDISLiveEntityProvider::cancel()
 {
     if ( isRunning() )
     {
@@ -94,7 +95,12 @@ int DISListener::cancel()
     return 0;
 }
 
-void DISListener::onEntityStateChanged( Entity_State_PDU* entityState )
+void KDISLiveEntityProvider::startImplementation()
 {
-    //OE_NOTICE << "Entity state changed " << id << ":   " << lat << ", " << lon << ", " << alt << " marker=" << marker << " force=" << forceId << std::endl;
+    startThread();
 }
+
+void KDISLiveEntityProvider::stopImplementation()
+{
+    cancel();
+} 

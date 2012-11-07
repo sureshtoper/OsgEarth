@@ -39,6 +39,8 @@
 
 #include <osgEarthSim/Simulation>
 #include <osgEarthSim/IconFactory>
+#include <osgEarthSim/KDISLiveEntityProvider>
+#include <osgEarthSim/KDISLogEntityProvider>
 
 #include <OpenThreads/Thread>
 
@@ -150,6 +152,20 @@ main(int argc, char** argv)
 {    
     osg::ArgumentParser arguments(&argc,argv);
 
+    std::string ip = "192.168.1.255";
+    int port = 3000;
+
+    std::string log;
+
+
+    double entityTimeout = -1.0;
+
+    arguments.read( "--ip", ip);
+    arguments.read( "--port", port );
+    arguments.read( "--log", log );
+    arguments.read( "--timeout", entityTimeout );
+    arguments.read( "--log" , log );
+
     // initialize a viewer.
     osgViewer::Viewer viewer( arguments );
     viewer.setCameraManipulator( new EarthManipulator );
@@ -167,8 +183,25 @@ main(int argc, char** argv)
     osg::Group* tracks = new osg::Group();
     root->addChild( tracks );
 
-    osg::ref_ptr< Simulation > simulation = new Simulation(mapNode, tracks );
-    simulation->start();    
+    osg::ref_ptr< EntityProvider > entityProvider;
+    if (log.empty())
+    {
+        OE_NOTICE << "Connecting to live simulation on " << ip << ":" << port << std::endl;
+        //Try to connect to a live sim
+        entityProvider = new KDISLiveEntityProvider( ip, port );
+    }
+    else
+    {
+        //Connect to a log provider
+        OE_NOTICE << "Opening log " << log << std::endl;
+        entityProvider = new KDISLogEntityProvider( log );
+    }    
+
+    //Connect a simulation to the entity provider
+    osg::ref_ptr< Simulation > simulation = new Simulation(mapNode, tracks,  entityProvider );    
+    simulation->setEntityTimeout( entityTimeout );
+    //Start the entity provider
+    entityProvider->start();
 
 
     // Set up the automatic decluttering. setEnabled() activates decluttering for

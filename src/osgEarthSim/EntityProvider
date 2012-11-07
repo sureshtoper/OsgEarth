@@ -1,0 +1,101 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+* Copyright 2008-2012 Pelican Mapping
+* http://osgearth.org
+*
+* osgEarth is free software; you can redistribute it and/or modify
+* it under the terms of the GNU Lesser General Public License as published by
+* the Free Software Foundation; either version 2 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU Lesser General Public License for more details.
+*
+* You should have received a copy of the GNU Lesser General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>
+*/
+#ifndef OSGEARTHSIM_ENTITYPROVIDER_H
+#define OSGEARTHSIM_ENTITYPROVIDER_H 1
+
+#include <osgEarthSim/Common>
+#include <list>
+#include <OpenThreads/Thread>
+#include <osg/ref_ptr>
+
+#include "KDIS/PDU/Entity_Info_Interaction/Entity_State_PDU.h"
+
+namespace osgEarth { namespace Sim {
+
+    using namespace KDIS;
+    using namespace DATA_TYPE;
+    using namespace PDU;
+    using namespace ENUMS;
+    using namespace UTILS;
+
+    /**
+     * A callback that is called from an EntityProvider when an entity state has changed.
+     */
+    class EntityCallback : public osg::Referenced
+    {        
+    public:
+        virtual void onEntityStateChanged( Entity_State_PDU* entityState ) = 0;
+    };
+
+    typedef std::list< osg::ref_ptr< EntityCallback > > EntityCallbackList;
+
+    /**
+     * Base class for objects that can provide entity state in a simulation.
+     */
+    class OSGEARTHSIM_EXPORT EntityProvider  : public osg::Referenced
+    {       
+    public:
+        EntityProvider();
+        virtual ~EntityProvider();
+
+        /**
+         * Starts streaming entities
+         */
+        void start();
+
+        /**
+         * Stops streaming entities
+         */
+        void stop();
+
+        /**
+         * Gets whether or not the EntityProvider has been started.
+         */
+        bool isStarted() const { return _isStarted;}     
+
+        /**
+         * Gets the list of callbacks to this EntityProvider
+         */
+        EntityCallbackList& getCallbacks() { return _callbacks; }
+
+    protected:
+
+        /**
+         * Helper method that notifies any callbacks of a new entity state
+         */        
+        void onEntityStateChanged( Entity_State_PDU* entityState );
+
+        /**
+         *Starts the entity streaming logic, usually in a different thread.  Overriden in subclasses.
+         */
+        virtual void startImplementation()  = 0;
+
+        /**
+         *Stops the entity streaming logic, usually by stopping the thread.  Overriden in subclasses.
+         */
+        virtual void stopImplementation() = 0;
+
+    private:
+        EntityCallbackList _callbacks;
+        bool _isStarted;        
+    };
+
+}}
+
+#endif //OSGEARTHSIM_ENTITYPROVIDER_H

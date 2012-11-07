@@ -8,16 +8,20 @@ SET(LIB_NAME osgEarthSim)
 
 SET(HEADER_PATH ${OSGEARTH_SOURCE_DIR}/include/${LIB_NAME})
 SET(LIB_PUBLIC_HEADERS    
-    Common
-    DISListener
+    Common    
+    EntityProvider        
     IconFactory
+    KDISLiveEntityProvider
+    KDISLogEntityProvider
     Simulation
 )
 
 ADD_LIBRARY(${LIB_NAME} ${OSGEARTH_USER_DEFINED_DYNAMIC_OR_STATIC}
     ${LIB_PUBLIC_HEADERS}
-    DISListener.cpp
+    EntityProvider.cpp    
     IconFactory.cpp
+    KDISLiveEntityProvider.cpp
+    KDISLogEntityProvider.cpp
     Simulation.cpp
 )
 
