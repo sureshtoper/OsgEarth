@@ -1436,10 +1436,9 @@ EarthManipulator::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapt
                 for( TouchEvents::iterator i = te.begin(); i != te.end(); ++i )
                 {
                     Action action = _settings->getAction(i->_eventType, 0, 0);
-                    if ( handleMultiTouchAction(action, *i, view) )
-                    {
-                        aa.requestRedraw();
-                    }
+
+                    handleMovementAction(action._type, i->_dx, i->_dy, view);
+                    aa.requestRedraw();
                 }
                 handled = true;
             }
@@ -1757,75 +1756,90 @@ bool
 EarthManipulator::parseTouchEvents( TouchEvents& output )
 {
     // two-finger drag gestures:
-    if (_touchPointQueue.size() == 2 &&     // two touch points
-        _touchPointQueue[1].size()   == 2 &&     // two fingers
-        _touchPointQueue[2].size()   == 2)       // two fingers
+    if (_touchPointQueue.size() == 2 )
     {
-        MultiTouchPoint& e0 = _touchPointQueue[0];
-        MultiTouchPoint& e1 = _touchPointQueue[1];
-
-        if (e0[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-            e1[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-            e0[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-            e1[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED)
+        if (_touchPointQueue[0].size()   == 2 &&     // two fingers
+            _touchPointQueue[1].size()   == 2)       // two fingers
         {
-            // gather information about what happened:
-            float dx[2], dy[2];
-            for( int i=0; i<2; ++i )
-            {
-                dx[i] = e1[i].x - e0[i].x;
-                dy[i] = e1[i].y - e0[i].y;
-            }
-            osg::Vec2f v0( dx[0], dy[0] );
-            osg::Vec2f v1( dx[1], dy[1] );
-            float deltaDistance = v1.length() - v0.length();
-            float dot = fabs( v0 * v1 );
+            MultiTouchPoint& e0 = _touchPointQueue[0];
+            MultiTouchPoint& e1 = _touchPointQueue[1];
 
-            // how see if that corresponds to any touch events:
-            if ( deltaDistance > 0.1 ) // bother??
+            if (e0[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
+                e1[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
+                e0[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
+                e1[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED)
             {
-                // distance between the fingers changed: a pinch.
-                output.push_back(TouchEvent());
-                TouchEvent& ev = output.back();
-                ev._eventType = EVENT_MULTI_PINCH;
-                ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
-                ev._deltaDistance = deltaDistance;
-                ev._dot = dot;
-            }
-            
-            if ( dot < 1.0 ) // bother??
-            {
-                // angle between vectors changed: a twist.
-                output.push_back(TouchEvent());
-                TouchEvent& ev = output.back();
-                ev._eventType = EVENT_MULTI_TWIST;
-                ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
-                ev._deltaDistance = deltaDistance;
-                ev._dot = dot;
-            }
+                // gather information about what happened:
+                float dx[2], dy[2];
+                for( int i=0; i<2; ++i )
+                {
+                    dx[i] = e1[i].x - e0[i].x;
+                    dy[i] = e1[i].y - e0[i].y;
+                }
+                osg::Vec2f v0( dx[0], dy[0] );
+                osg::Vec2f v1( dx[1], dy[1] );
+                float deltaDistance = v1.length() - v0.length();
+                float dot = fabs( v0 * v1 );
 
-            if ( true ) // ???
-            {
-                // two-finger move.
-                output.push_back(TouchEvent());
-                TouchEvent& ev = output.back();
-                ev._eventType = EVENT_MULTI_DRAG;
-                ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
-                ev._deltaDistance = deltaDistance;
-                ev._dot = dot;
+                // how see if that corresponds to any touch events:
+                if ( deltaDistance > 0.1 ) // bother??
+                {
+                    // distance between the fingers changed: a pinch.
+                    output.push_back(TouchEvent());
+                    TouchEvent& ev = output.back();
+                    ev._eventType = EVENT_MULTI_PINCH;
+                    ev._dx = 0.0, ev._dy = deltaDistance;
+                    //ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
+                    //ev._deltaDistance = deltaDistance;
+                    //ev._dot = dot;
+                }
+                
+                if ( dot < 1.0 ) // bother??
+                {
+                    // angle between vectors changed: a twist.
+                    output.push_back(TouchEvent());
+                    TouchEvent& ev = output.back();
+                    ev._eventType = EVENT_MULTI_TWIST;
+                    ev._dx = 0.0, ev._dy = dot;
+                    //TODO: translate the "twist angle" into dx/dy rotations.
+
+                    //ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
+                    //ev._deltaDistance = deltaDistance;
+                    //ev._dot = dot;
+                }
+
+                if ( true ) // ???
+                {
+                    // two-finger move.
+                    output.push_back(TouchEvent());
+                    TouchEvent& ev = output.back();
+                    ev._eventType = EVENT_MULTI_DRAG;
+                    ev._dx = 0.5 * (dx[0]+dx[1]);
+                    ev._dy = 0.5 * (dy[0]+dy[1]);
+                    //ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
+                    //ev._deltaDistance = deltaDistance;
+                    //ev._dot = dot;
+                }
             }
         }
-    }
 
-    else if ( _touchPointQueue.size() == 1 )
-    {
-        MultiTouchPoint& ev = _touchPointQueue.front();
+        else if (_touchPointQueue[0].size() == 1 &&     // one fingers
+                 _touchPointQueue[1].size() == 1)       // one fingers
+        {
+            MultiTouchPoint& e0 = _touchPointQueue[0];
+            MultiTouchPoint& e1 = _touchPointQueue[1];
 
-        if ( ev.size() == 1 ) // one-finger
-        {
-        }
-        else if ( ev.size() == 2 ) // two-finger
-        {
+            if (e0[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
+                e1[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
+                e0[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
+                e1[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED)
+            {
+                output.push_back(TouchEvent());
+                TouchEvent& ev = output.back();
+                ev._eventType = EVENT_MOUSE_DRAG;
+                ev._dx = e1[0].x - e0[0].x;
+                ev._dy = e1[0].y - e0[0].y;
+            }
         }
     }
 
@@ -2477,6 +2491,7 @@ EarthManipulator::handleScrollAction( const Action& action, double duration )
     return handleAction( action, dx, dy, duration );
 }
 
+#if 0
 bool
 EarthManipulator::handleMultiTouchAction( const Action& action, const EarthManipulator::TouchEvent& te, osg::View* view )
 {
@@ -2490,6 +2505,7 @@ EarthManipulator::handleMultiTouchAction( const Action& action, const EarthManip
         return false;
     }
 }
+#endif
 
 bool
 EarthManipulator::handleAction( const Action& action, double dx, double dy, double duration )

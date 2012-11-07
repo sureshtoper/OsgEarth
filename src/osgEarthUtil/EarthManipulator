@@ -778,11 +778,15 @@ namespace osgEarth { namespace Util
         typedef std::vector<TouchPoint> MultiTouchPoint; // one per ID (finger/touchpoint)
         typedef std::deque<MultiTouchPoint> MultiTouchPointQueue;
         MultiTouchPointQueue _touchPointQueue;
+        //struct TouchEvent {
+        //    EventType _eventType;     // derived touch/other event
+        //    float     _deltaDistance; // change in distance between 2 touches
+        //    float     _dx[2], _dy[2]; // movement of primary and secondary touch points
+        //    float     _dot;
+        //};
         struct TouchEvent {
-            EventType _eventType;     // derived touch/other event
-            float     _deltaDistance; // change in distance between 2 touches
-            float     _dx[2], _dy[2]; // movement of primary and secondary touch points
-            float     _dot;
+            EventType _eventType;
+            float     _dx, _dy;
         };
         typedef std::vector<TouchEvent> TouchEvents;
         void addTouchEvents( const osgGA::GUIEventAdapter& ea );
@@ -799,7 +803,7 @@ namespace osgEarth { namespace Util
         virtual bool handlePointAction( const Action& type, float mx, float my, osg::View* view );
         virtual void handleContinuousAction( const Action& action, osg::View* view );
         virtual void handleMovementAction( const ActionType& type, double dx, double dy, osg::View* view );
-        virtual bool handleMultiTouchAction( const Action& action, const TouchEvent& te, osg::View* view );
+        //virtual bool handleMultiTouchAction( const Action& action, const TouchEvent& te, osg::View* view );
 
     protected:
 
