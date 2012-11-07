@@ -91,7 +91,8 @@ void EntityRecord::setEntityState(Entity_State_PDU* state)
 Simulation::Simulation(MapNode* mapNode, osg::Group* entityGroup, IconFactory* iconFactory):
 _mapNode( mapNode ),
 _entityGroup( entityGroup ),
-_iconFactory( iconFactory )
+_iconFactory( iconFactory ),
+_entityTimeout(-1.0)
 {        
     //Create an IconFactory if we weren't given one
     if (!_iconFactory.valid())
@@ -119,54 +120,118 @@ Simulation::createFieldSchema( TrackNodeFieldSchema& schema )
 
 void Simulation::onEntityStateChanged( Entity_State_PDU* entityState )
 {
-    OpenThreads::ScopedLock< OpenThreads::Mutex > lk( _mutex );        
-    double t = osg::Timer::instance()->time_s();
-    //Initialize the dead reckoning on the entity
-    entityState->InitDeadReckoning();                
-
-    int id = entityState->GetEntityIdentifier().GetEntityID();
-    ForceID forceId = entityState->GetForceID();
-
-
-    //Compute the location
-    WorldCoordinates location = entityState->GetEntityLocation();
-    double lat, lon, alt;
-    KDIS::UTILS::GeocentricToGeodetic(location.GetX(), location.GetY(), location.GetZ(), lat, lon, alt, WGS_1984);        
-    GeoPoint position(SpatialReference::create("wgs84"), lon, lat, alt, ALTMODE_ABSOLUTE );
-
-    //Try to get the existing record
-    EntityRecords::iterator itr = _entities.find( id );
     EntityRecord* record = 0;
-    if (itr == _entities.end())
+    bool added = false;
+    
     {
-        //Create a new entity record
+        OpenThreads::ScopedLock< OpenThreads::Mutex > lk( _mutex );        
 
-        //OE_NOTICE << "Adding new entity " << id << std::endl;
-        // build a track field schema.
-        TrackNodeFieldSchema schema;
-        createFieldSchema( schema );
+        //Initialize the dead reckoning on the entity
+        entityState->InitDeadReckoning();                
 
-        osg::Image* image = _iconFactory->getIcon( forceId );            
+        int id = entityState->GetEntityIdentifier().GetEntityID();
+        ForceID forceId = entityState->GetForceID();
 
-        TrackNode* trackNode = new TrackNode(_mapNode.get(), position, image, schema);
-        trackNode->setFieldValue(FIELD_NAME, entityState->GetEntityMarking().GetEntityMarkingString());
-        record = new EntityRecord( trackNode, entityState );
-        _entities[id] = record;
-        _entityGroup->addChild( trackNode );
+
+        //Compute the location
+        WorldCoordinates location = entityState->GetEntityLocation();
+        double lat, lon, alt;
+        KDIS::UTILS::GeocentricToGeodetic(location.GetX(), location.GetY(), location.GetZ(), lat, lon, alt, WGS_1984);        
+        GeoPoint position(SpatialReference::create("wgs84"), lon, lat, alt, ALTMODE_ABSOLUTE );
+
+        //Try to get the existing record
+        EntityRecords::iterator itr = _entities.find( id );
+        if (itr == _entities.end())
+        {
+            //Create a new entity record
+
+            //OE_NOTICE << "Adding new entity " << id << std::endl;
+            // build a track field schema.
+            TrackNodeFieldSchema schema;
+            createFieldSchema( schema );
+
+            osg::Image* image = _iconFactory->getIcon( forceId );            
+
+            TrackNode* trackNode = new TrackNode(_mapNode.get(), position, image, schema);
+            trackNode->setFieldValue(FIELD_NAME, entityState->GetEntityMarking().GetEntityMarkingString());
+            record = new EntityRecord( trackNode, entityState );
+            _entities[id] = record;
+            _entityGroup->addChild( trackNode );
+            
+            added = true;
+        }
+        else
+        {   
+            record = itr->second.get();
+            record->setEntityState( entityState );
+        }
+    }
+    
+    if (added)
+    {
+        for (SimulationCallbackList::iterator it = _simCallbacks.begin(); it != _simCallbacks.end(); ++it)
+        {
+            it->get()->onEntityAdded(record);
+        }
     }
     else
-    {   
-        record = itr->second.get();
-        record->setEntityState( entityState );
-    }     
+    {
+        for (SimulationCallbackList::iterator it = _simCallbacks.begin(); it != _simCallbacks.end(); ++it)
+        {
+            it->get()->onEntityStateChanged(record);
+        }
+    }
 }
 
 void Simulation::updateSim()
 {                
     OpenThreads::ScopedLock< OpenThreads::Mutex > lk( _mutex );
+    
+    std::vector<int> toRemove;
+    
     for (EntityRecords::iterator itr = _entities.begin(); itr != _entities.end(); itr++)
     {
-        itr->second->updateSimulation();
+        double t = osg::Timer::instance()->time_s();
+        if (_entityTimeout > 0.0 && t - itr->second->getTime() > _entityTimeout)
+        {
+            //old mark for deletion
+            toRemove.push_back(itr->first);
+        }
+        else
+        {
+            itr->second->updateSimulation();
+        }
+    }
+    
+    for (std::vector<int>::iterator it = toRemove.begin(); it != toRemove.end(); ++it)
+    {
+        osg::ref_ptr<EntityRecord> record = _entities[*it];
+        _entityGroup->removeChild(record->getTrackNode());
+        _entities.erase(*it);
+        
+        for (SimulationCallbackList::iterator it = _simCallbacks.begin(); it != _simCallbacks.end(); ++it)
+        {
+            it->get()->onEntityRemoved(record.get());
+        }
     }
 }
+
+void Simulation::setEntityTimeout(double seconds)
+{
+    _entityTimeout = seconds;
+}
+
+void Simulation::addSimulationCallback(SimulationCallback* cb)
+{
+    if (cb)
+        const_cast<Simulation*>(this)->_simCallbacks.push_back(cb);
+}
+
+void Simulation::removeSimulationCallback(SimulationCallback* cb)
+{
+    SimulationCallbackList::iterator it = std::find(_simCallbacks.begin(), _simCallbacks.end(), cb);
+    if (it != _simCallbacks.end())
+        _simCallbacks.erase(it);
+}
+
 

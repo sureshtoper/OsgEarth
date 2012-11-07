@@ -44,7 +44,10 @@ namespace osgEarth { namespace Sim {
 
         void updateSimulation( );          
 
-        void setEntityState(Entity_State_PDU* state);          
+        Entity_State_PDU* getEntityState() const { return _state; }
+        void setEntityState(Entity_State_PDU* state);
+        
+        TrackNode* getTrackNode() const { return _trackNode.get(); }
 
     private:
         double _time;
@@ -58,6 +61,22 @@ namespace osgEarth { namespace Sim {
 
 
     /***************************************************************************/
+    
+    
+    struct OSGEARTHSIM_EXPORT SimulationCallback : public osg::Referenced
+    {
+        virtual void onEntityStateChanged(EntityRecord const* record) { };
+        
+        virtual void onEntityAdded(EntityRecord const* record) { };
+        
+        virtual void onEntityRemoved(EntityRecord const* record) { };
+        
+        virtual ~SimulationCallback() { };
+    };
+    
+    typedef std::list< osg::ref_ptr<SimulationCallback> > SimulationCallbackList;
+    
+    /***************************************************************************/
 
     class OSGEARTHSIM_EXPORT Simulation : public DISListener, public osg::Referenced
     {
@@ -69,6 +88,11 @@ namespace osgEarth { namespace Sim {
         virtual void onEntityStateChanged( Entity_State_PDU* entityState );          
 
         void updateSim();
+        
+        void setEntityTimeout(double seconds);
+        
+        void addSimulationCallback(SimulationCallback* cb);
+        void removeSimulationCallback(SimulationCallback* cb);
 
     protected:
 
@@ -79,6 +103,8 @@ namespace osgEarth { namespace Sim {
         osg::ref_ptr< MapNode > _mapNode;    
         OpenThreads::Mutex _mutex; 
         osg::ref_ptr< IconFactory > _iconFactory;
+        SimulationCallbackList _simCallbacks;
+        double _entityTimeout;
     };
 
 }}
