@@ -27,7 +27,7 @@ using namespace osgEarth::Sim;
 KDISLogEntityProvider::KDISLogEntityProvider(const std::string &filename):
 _done(false),
 _filename( filename),
-_loop(true)
+_loop(false)
 {
 }
 
@@ -58,6 +58,7 @@ void KDISLogEntityProvider::run()
             {
                 if (log) delete log;
                 log = new DIS_Logger_Playback( _filename, bufferSize );
+                uiStartTime = time( NULL );
                 OE_NOTICE << "Opening log " << std::endl;
             }
 

@@ -159,12 +159,14 @@ main(int argc, char** argv)
 
 
     double entityTimeout = -1.0;
+    bool loop = false;
 
     arguments.read( "--ip", ip);
     arguments.read( "--port", port );
     arguments.read( "--log", log );
     arguments.read( "--timeout", entityTimeout );
     arguments.read( "--log" , log );
+    while (arguments.read( "--loop")) loop = true;    
 
     // initialize a viewer.
     osgViewer::Viewer viewer( arguments );
@@ -195,6 +197,7 @@ main(int argc, char** argv)
         //Connect to a log provider
         OE_NOTICE << "Opening log " << log << std::endl;
         entityProvider = new KDISLogEntityProvider( log );
+        static_cast<KDISLogEntityProvider*>(entityProvider.get())->setLoop( loop );
     }    
 
     //Connect a simulation to the entity provider
