@@ -100,8 +100,8 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     osg::setNotifyHandler(_notifyHandler);
     osgEarth::setNotifyHandler(_notifyHandler);
     
-    osg::setNotifyLevel(osg::INFO);
-    osgEarth::setNotifyLevel(osg::FATAL);
+    osg::setNotifyLevel(osg::FATAL);
+    osgEarth::setNotifyLevel(osg::INFO);
 
     osg::notify(osg::ALWAYS)<<"Testing"<<std::endl;
 
@@ -128,8 +128,10 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     _viewer->getEventQueue()->getCurrentEventState()->setMouseYOrientation(osgGA::GUIEventAdapter::Y_INCREASING_UPWARDS);
 
     // install our default manipulator (do this before calling load)
-    _viewer->setCameraManipulator( new osgEarth::Util::EarthMultiTouchManipulator() );
+    //_viewer->setCameraManipulator( new osgEarth::Util::EarthMultiTouchManipulator() );
+    _viewer->setCameraManipulator( new osgEarth::Util::EarthManipulator() ); //EarthMultiTouchManipulator() );
     
+#if 0
     osg::Light* light = new osg::Light( 0 );
     light->setPosition( osg::Vec4(0, -1, 0, 0 ) );
     light->setAmbient( osg::Vec4(0.4f, 0.4f, 0.4f ,1.0) );
@@ -140,9 +142,9 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     material->setAmbient(osg::Material::FRONT, osg::Vec4(0.4,0.4,0.4,1.0));
     material->setDiffuse(osg::Material::FRONT, osg::Vec4(0.9,0.9,0.9,1.0));
     material->setSpecular(osg::Material::FRONT, osg::Vec4(0.4,0.4,0.4,1.0));
+#endif
     
-    
-    osg::Node* node = osgDB::readNodeFile("/storage/sdcard0/Download/tests/readymap.earth");
+    osg::Node* node = osgDB::readNodeFile("http://readymap.org/readymap/maps/public/2.earth");
     if ( !node )
     {
         OSG_ALWAYS << "Unable to load an earth file from the command line." << std::endl;
@@ -168,24 +170,30 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     root->addChild( mapNode.get() );
     //root->getOrCreateStateSet()->setAttribute(light);
     
+#if 0
     //have to add these
     root->getOrCreateStateSet()->setAttribute(material);
     //root->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
-    
+#endif
     double hours = 12.0f;
     float ambientBrightness = 0.4f;
     osgEarth::Util::SkyNode* sky = new osgEarth::Util::SkyNode( mapNode->getMap() );
     sky->setAmbientBrightness( ambientBrightness );
     sky->setDateTime( 1984, 11, 8, hours );
-    sky->attach( _viewer, 0 );
+    sky->attach( _viewer );
     root->addChild( sky );
-        
+
+
+    root->getOrCreateStateSet()->setMode(GL_LIGHTING,
+    		osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE);
     
     //for some reason we have to do this as global stateset doesn't
     //appear to be in the statesetstack
     root->getOrCreateStateSet()->setAttribute(_viewer->getLight());
     
     _viewer->setSceneData( root );
+
+    _viewer->setRunFrameScheme( osgViewer::ViewerBase::ON_DEMAND );
 
     _viewer->realize();
 

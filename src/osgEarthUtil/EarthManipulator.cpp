@@ -337,11 +337,20 @@ EarthManipulator::Settings::bindScroll(ActionType action, int scrolling_motion,
         Action( action, options ) );
 }
 
+
 void
 EarthManipulator::Settings::bindPinch(ActionType action, const ActionOptions& options)
 {
     bind(
         InputSpec( EarthManipulator::EVENT_MULTI_PINCH, 0, 0 ),
+        Action( action, options ) );
+}
+
+void
+EarthManipulator::Settings::bindMultiDrag(ActionType action, const ActionOptions& options)
+{
+    bind(
+        InputSpec( EarthManipulator::EVENT_MULTI_DRAG, 0, 0 ),
         Action( action, options ) );
 }
 
@@ -498,6 +507,9 @@ EarthManipulator::configureDefaultSettings()
     // map multi-touch pinch to a discrete zoom
     options.clear();
     _settings->bindPinch( ACTION_ZOOM, options );
+
+    options.clear();
+    _settings->bindMultiDrag( ACTION_ROTATE, options );
 
     //_settings->setThrowingEnabled( false );
     _settings->setLockAzimuthWhilePanning( true );
@@ -1392,6 +1404,7 @@ EarthManipulator::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapt
         return false;
     }
 
+
     // the camera manipulator runs last after any other event handlers. So bail out
     // if the incoming event has already been handled by another handler.
     if ( ea.getHandled() )
@@ -1418,38 +1431,36 @@ EarthManipulator::handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapt
         }
     }
 
+
     if ( ea.isMultiTouchEvent() )
     {
+//OE_WARN << LC << "MULTI-TOUCH EVENT RECEIVED!" << std::endl;
         // not a mouse event; clear the mouse queue.
         resetMouse( aa );
 
-        switch( ea.getEventType() )
-        {
-        case osgGA::GUIEventAdapter::PUSH:
-        case osgGA::GUIEventAdapter::RELEASE:
-        case osgGA::GUIEventAdapter::DRAG:
             // queue up a touch event set and figure out the current state:
             addTouchEvents(ea);
             TouchEvents te;
             if ( parseTouchEvents(te) )
-            {
+           {
+//                OE_WARN << LC << "ParseTouchEvents: " << te.size() << std::endl;
                 for( TouchEvents::iterator i = te.begin(); i != te.end(); ++i )
                 {
-                    Action action = _settings->getAction(i->_eventType, 0, 0);
-
+                    OE_WARN << LC << "P: " << i->_dx << ", " << i->_dy << std::endl;
+                    Action action = _settings->getAction(i->_eventType, i->_mbmask, 0);
                     handleMovementAction(action._type, i->_dx, i->_dy, view);
                     aa.requestRedraw();
                 }
                 handled = true;
             }
-            break;
-        }
+ //           else OE_WARN << LC << "ParseTouchEvents <= false" << std::endl;
     }
 
-    else
+//    else
+    if ( !handled )
     {
         // not a touch event; clear the touch queue.
-        _touchPointQueue.clear();
+        //_touchPointQueue.clear();
 
         switch( ea.getEventType() )
         {
@@ -1716,7 +1727,7 @@ EarthManipulator::flushMouseEventStack()
 {
     _ga_t1 = NULL;
     _ga_t0 = NULL;
-    _touchPointQueue.clear();
+    //_touchPointQueue.clear();
 }
 
 
@@ -1725,14 +1736,14 @@ EarthManipulator::addMouseEvent(const osgGA::GUIEventAdapter& ea)
 {
     _ga_t1 = _ga_t0;
     _ga_t0 = &ea;
-    _touchPointQueue.clear();
+    //_touchPointQueue.clear();
 }
 
 void
 EarthManipulator::addTouchEvents(const osgGA::GUIEventAdapter& ea)
 {
     // first, push the old event to the back of the queue.
-    if ( _touchPointQueue.size() > 1 )
+    while ( _touchPointQueue.size() > 1 )
         _touchPointQueue.pop_front();
 
     // queue any new events.
@@ -1755,57 +1766,55 @@ EarthManipulator::addTouchEvents(const osgGA::GUIEventAdapter& ea)
 bool
 EarthManipulator::parseTouchEvents( TouchEvents& output )
 {
+// OE_WARN << "queue size = " << _touchPointQueue.size() << std::endl;
+
+    const float sens = 0.005f;
+
     // two-finger drag gestures:
     if (_touchPointQueue.size() == 2 )
     {
+//OE_WARN << "    size 0 = " << _touchPointQueue[0].size() << ", size 1 = " << _touchPointQueue[1].size() << std::endl;
         if (_touchPointQueue[0].size()   == 2 &&     // two fingers
             _touchPointQueue[1].size()   == 2)       // two fingers
         {
-            MultiTouchPoint& e0 = _touchPointQueue[0];
-            MultiTouchPoint& e1 = _touchPointQueue[1];
+            MultiTouchPoint& p0 = _touchPointQueue[0];
+            MultiTouchPoint& p1 = _touchPointQueue[1];
 
-            if (e0[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-                e1[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-                e0[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-                e1[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED)
+            if (p0[0].phase != osgGA::GUIEventAdapter::TOUCH_ENDED &&
+                p1[0].phase != osgGA::GUIEventAdapter::TOUCH_ENDED &&
+                p0[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
+                p1[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED)
             {
                 // gather information about what happened:
                 float dx[2], dy[2];
                 for( int i=0; i<2; ++i )
                 {
-                    dx[i] = e1[i].x - e0[i].x;
-                    dy[i] = e1[i].y - e0[i].y;
+                    dx[i] = p1[i].x - p0[i].x;
+                    dy[i] = p1[i].y - p0[i].y;
                 }
-                osg::Vec2f v0( dx[0], dy[0] );
-                osg::Vec2f v1( dx[1], dy[1] );
-                float deltaDistance = v1.length() - v0.length();
-                float dot = fabs( v0 * v1 );
+                osg::Vec2f vec0 = osg::Vec2f(p0[1].x,p0[1].y)-osg::Vec2f(p0[0].x,p0[0].y);
+                osg::Vec2f vec1 = osg::Vec2f(p1[1].x,p1[1].y)-osg::Vec2f(p1[0].x,p1[0].y);
+                float deltaDistance = vec1.length() - vec0.length();
+
+                vec0.normalize();
+                vec1.normalize();
+                float dot = fabs( vec0 * vec1 );
 
                 // how see if that corresponds to any touch events:
-                if ( deltaDistance > 0.1 ) // bother??
                 {
                     // distance between the fingers changed: a pinch.
                     output.push_back(TouchEvent());
                     TouchEvent& ev = output.back();
                     ev._eventType = EVENT_MULTI_PINCH;
-                    ev._dx = 0.0, ev._dy = deltaDistance;
-                    //ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
-                    //ev._deltaDistance = deltaDistance;
-                    //ev._dot = dot;
+                    ev._dx = 0.0, ev._dy = deltaDistance * -sens;
                 }
-                
-                if ( dot < 1.0 ) // bother??
+
                 {
                     // angle between vectors changed: a twist.
                     output.push_back(TouchEvent());
                     TouchEvent& ev = output.back();
                     ev._eventType = EVENT_MULTI_TWIST;
-                    ev._dx = 0.0, ev._dy = dot;
-                    //TODO: translate the "twist angle" into dx/dy rotations.
-
-                    //ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
-                    //ev._deltaDistance = deltaDistance;
-                    //ev._dot = dot;
+                    ev._dx = 0.0, ev._dy = dot * sens;
                 }
 
                 if ( true ) // ???
@@ -1814,33 +1823,32 @@ EarthManipulator::parseTouchEvents( TouchEvents& output )
                     output.push_back(TouchEvent());
                     TouchEvent& ev = output.back();
                     ev._eventType = EVENT_MULTI_DRAG;
-                    ev._dx = 0.5 * (dx[0]+dx[1]);
-                    ev._dy = 0.5 * (dy[0]+dy[1]);
-                    //ev._dx[0] = dx[0], ev._dx[1] = dx[1], ev._dy[0] = dy[0], ev._dy[1] = dy[1];
-                    //ev._deltaDistance = deltaDistance;
-                    //ev._dot = dot;
+                    ev._dx = 0.5 * (dx[0]+dx[1]) * sens;
+                    ev._dy = 0.5 * (dy[0]+dy[1]) * sens;
                 }
             }
         }
 
-        else if (_touchPointQueue[0].size() == 1 &&     // one fingers
-                 _touchPointQueue[1].size() == 1)       // one fingers
+#if 1
+        else if (_touchPointQueue[0].size() >= 1 &&     // one finger
+                 _touchPointQueue[1].size() >= 1)       // one finger
         {
-            MultiTouchPoint& e0 = _touchPointQueue[0];
-            MultiTouchPoint& e1 = _touchPointQueue[1];
+//OE_WARN << LC << "single-touch!!!" << std::endl;
+            MultiTouchPoint& p0 = _touchPointQueue[0];
+            MultiTouchPoint& p1 = _touchPointQueue[1];
 
-            if (e0[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-                e1[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-                e0[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED &&
-                e1[1].phase == osgGA::GUIEventAdapter::TOUCH_MOVED)
+            if (p0[0].phase != osgGA::GUIEventAdapter::TOUCH_ENDED &&
+                p1[0].phase == osgGA::GUIEventAdapter::TOUCH_MOVED )
             {
                 output.push_back(TouchEvent());
                 TouchEvent& ev = output.back();
                 ev._eventType = EVENT_MOUSE_DRAG;
-                ev._dx = e1[0].x - e0[0].x;
-                ev._dy = e1[0].y - e0[0].y;
+                ev._mbmask = osgGA::GUIEventAdapter::LEFT_MOUSE_BUTTON;
+                ev._dx = (p1[0].x - p0[0].x) * sens;
+                ev._dy = (p1[0].y - p0[0].y) * sens;
             }
         }
+#endif
     }
 
     return output.size() > 0;
@@ -2311,7 +2319,6 @@ EarthManipulator::handleMovementAction( const ActionType& type, double dx, doubl
 {
     switch( type )
     {
-    default:break;
     case ACTION_PAN:
         pan( dx, dy );
         break;
@@ -2335,6 +2342,7 @@ EarthManipulator::handleMovementAction( const ActionType& type, double dx, doubl
     case ACTION_EARTH_DRAG:
         drag( dx, dy, view );
         break;
+    default:break;
     }
 }
 

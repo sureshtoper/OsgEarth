@@ -331,6 +331,9 @@ namespace osgEarth { namespace Util
 
             void bindPinch(
                 ActionType action, const ActionOptions& =ActionOptions() );
+   
+            void bindMultiDrag(
+                ActionType action, const ActionOptions& =ActionOptions() );
 
             /**
              * Sets an overall mouse sensitivity factor.
@@ -785,7 +788,9 @@ namespace osgEarth { namespace Util
         //    float     _dot;
         //};
         struct TouchEvent {
+            TouchEvent() : _mbmask(0) { }
             EventType _eventType;
+            unsigned  _mbmask;
             float     _dx, _dy;
         };
         typedef std::vector<TouchEvent> TouchEvents;
