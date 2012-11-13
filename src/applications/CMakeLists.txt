@@ -74,7 +74,7 @@ ADD_SUBDIRECTORY(osgearth_verticalscale)
 
 IF (KDIS_FOUND)
     ADD_SUBDIRECTORY(osgearth_simplesim)
-    ADD_SUBDIRECTORY(osgearth_stealthviewer)
+    ADD_SUBDIRECTORY(osgearth_sim)
 ENDIF()
 
 IF(NOT ${OPENSCENEGRAPH_VERSION} VERSION_LESS "3.1.0")
