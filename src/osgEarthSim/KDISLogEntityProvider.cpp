@@ -48,7 +48,7 @@ void KDISLogEntityProvider::run()
 
     //We can filter based on exercise ID using a single filter like this.
     PDU_Factory factory;
-    factory.AddFilter( new FactoryFilterExerciseID( 1 ) );    
+    //factory.AddFilter( new FactoryFilterExerciseID( 1 ) );    
 
     while (!_done)
     {        
