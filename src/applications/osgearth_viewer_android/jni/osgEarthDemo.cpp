@@ -40,7 +40,7 @@ void DemoScene::initDemo(const std::string &file)
     OSG_ALWAYS << "----osgEarthDemo----" << std::endl;
     
     // install our default manipulator (do this before calling load)
-    _viewer->setCameraManipulator( new osgEarth::Util::EarthMultiTouchManipulator() );
+    _viewer->setCameraManipulator(  new osgEarth::Util::EarthManipulator() );//new osgEarth::Util::EarthMultiTouchManipulator() );
     
     osg::Light* light = new osg::Light( 0 );
     light->setPosition( osg::Vec4(0, -1, 0, 0 ) );
