@@ -40,7 +40,8 @@ LOCAL_CFLAGS    := -Werror -fno-short-enums -DANDROID -DOSGEARTH_LIBRARY_STATIC
 LOCAL_CPPFLAGS  := -DOSG_LIBRARY_STATIC -DOSGEARTH_LIBRARY_STATIC -DANDROID
 
 LOCAL_LDLIBS    := -llog -lGLESv2 -lz -lgnustl_static -fuse-ld=gold
-LOCAL_SRC_FILES := osgNativeLib.cpp OsgMainApp.cpp OsgAndroidNotifyHandler.cpp EarthMultiTouchManipulator.cpp GLES2ShaderGenVisitor.cpp
+LOCAL_SRC_FILES := osgNativeLib.cpp OsgMainApp.cpp OsgAndroidNotifyHandler.cpp EarthMultiTouchManipulator.cpp GLES2ShaderGenVisitor.cpp DemoScene.cpp osgEarthDemo.cpp
+
 LOCAL_LDFLAGS   := -L $(OSGEARTH_LIBDIR) \
 -losgdb_kml \
 -losgdb_osgearth_gdal \

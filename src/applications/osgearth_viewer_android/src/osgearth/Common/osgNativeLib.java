@@ -1,4 +1,4 @@
-package osgearth.AndroidExample;
+package osgearth.Common;
 
 public class osgNativeLib {
 	
