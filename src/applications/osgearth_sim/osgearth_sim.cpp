@@ -41,6 +41,7 @@
 #include <osgEarthSim/IconFactory>
 #include <osgEarthSim/KDISLiveEntityProvider>
 #include <osgEarthSim/KDISLogEntityProvider>
+#include <osgEarthSim/WebLVCEntityProvider>
 
 #include <OpenThreads/Thread>
 
@@ -152,8 +153,8 @@ main(int argc, char** argv)
 {    
     osg::ArgumentParser arguments(&argc,argv);
 
-    std::string ip = "192.168.1.255";
-    int port = 3000;
+    std::string ip = "";
+    int port = -1;
 
     std::string log;
 
@@ -167,6 +168,10 @@ main(int argc, char** argv)
     arguments.read( "--timeout", entityTimeout );
     arguments.read( "--log" , log );
     while (arguments.read( "--loop")) loop = true;    
+
+
+    bool weblvc = false;
+    while (arguments.read( "--weblvc")) weblvc = true;    
 
     // initialize a viewer.
     osgViewer::Viewer viewer( arguments );
@@ -185,20 +190,48 @@ main(int argc, char** argv)
     osg::Group* tracks = new osg::Group();
     root->addChild( tracks );
 
-    osg::ref_ptr< EntityProvider > entityProvider;
-    if (log.empty())
-    {
-        OE_NOTICE << "Connecting to live simulation on " << ip << ":" << port << std::endl;
-        //Try to connect to a live sim
-        entityProvider = new KDISLiveEntityProvider( ip, port );
+    osg::ref_ptr< EntityProvider > entityProvider;    
+    if (weblvc)
+    {        
+        if (ip.empty())
+        {
+            ip = "pubdemo.mak.com";
+        }
+
+        if (port < 0)
+        {
+            port = 80;
+        }
+
+        OE_NOTICE << "Connecting to WebLVC server at " << ip << ":" << port << std::endl;
+
+        entityProvider = new WebLVCEntityProvider(ip, port, "/ws");
     }
-    else
-    {
+    else if (!log.empty())
+    {        
+
         //Connect to a log provider
         OE_NOTICE << "Opening log " << log << std::endl;
         entityProvider = new KDISLogEntityProvider( log );
         static_cast<KDISLogEntityProvider*>(entityProvider.get())->setLoop( loop );
-    }    
+    }
+    else
+    {
+        //Connect to a local simulation
+        if (ip.empty())
+        {
+            ip = "192.168.1.255";
+        }
+
+        if (port < 0)
+        {
+            port = 3000;
+        }
+
+        OE_NOTICE << "Connecting to live simulation on " << ip << ":" << port << std::endl;
+        //Try to connect to a live sim
+        entityProvider = new KDISLiveEntityProvider( ip, port );        
+    }                
 
     //Connect a simulation to the entity provider
     osg::ref_ptr< Simulation > simulation = new Simulation(mapNode, tracks,  entityProvider );    
