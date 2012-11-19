@@ -58,9 +58,9 @@ void EntityRecord::updateSimulation( )
         }
         _state->ApplyDeadReckoning( delta );            
         WorldCoordinates location = _state->GetEntityLocation();
-        double lat, lon, alt;
+        double lat, lon, alt;        
         KDIS::UTILS::GeocentricToGeodetic(location.GetX(), location.GetY(), location.GetZ(), lat, lon, alt, WGS_1984);        
-        GeoPoint position(SpatialReference::create("wgs84"), lon, lat, alt, ALTMODE_ABSOLUTE );
+        GeoPoint position(SpatialReference::create("wgs84"), lon, lat, alt, ALTMODE_ABSOLUTE );        
         _trackNode->setPosition( position );        
     }
 }
@@ -141,7 +141,9 @@ void Simulation::onEntityStateChanged( Entity_State_PDU* entityState )
         //Initialize the dead reckoning on the entity
         entityState->InitDeadReckoning();                
 
-        int id = entityState->GetEntityIdentifier().GetEntityID();
+        //int id = entityState->GetEntityIdentifier().GetEntityID();
+        //Get the entity id
+        EntityId id( entityState->GetEntityIdentifier().GetSiteID(), entityState->GetEntityIdentifier().GetApplicationID(), entityState->GetEntityIdentifier().GetEntityID());
         ForceID forceId = entityState->GetForceID();
 
 
@@ -149,7 +151,7 @@ void Simulation::onEntityStateChanged( Entity_State_PDU* entityState )
         WorldCoordinates location = entityState->GetEntityLocation();
         double lat, lon, alt;
         KDIS::UTILS::GeocentricToGeodetic(location.GetX(), location.GetY(), location.GetZ(), lat, lon, alt, WGS_1984);        
-        GeoPoint position(SpatialReference::create("wgs84"), lon, lat, alt, ALTMODE_ABSOLUTE );
+        GeoPoint position(SpatialReference::create("wgs84"), lon, lat, alt, ALTMODE_ABSOLUTE );        
 
         //Try to get the existing record
         EntityRecords::iterator itr = _entities.find( id );
@@ -166,16 +168,28 @@ void Simulation::onEntityStateChanged( Entity_State_PDU* entityState )
 
             TrackNode* trackNode = new TrackNode(_mapNode.get(), position, image, schema);
             trackNode->setFieldValue(FIELD_NAME, entityState->GetEntityMarking().GetEntityMarkingString());
-            record = new EntityRecord( trackNode, entityState );
+            record = new EntityRecord( trackNode, entityState );            
             _entities[id] = record;
             _entityGroup->addChild( trackNode );
             
             added = true;
         }
         else
-        {   
+        {               
             record = itr->second.get();
+            WorldCoordinates& prevLocation = record->getEntityState()->GetEntityLocation();
+            /*
+            // Check to see if the distances are wacky
+            double distance = prevLocation.GetDistance( entityState->GetEntityLocation() );            
+            if (distance > 1000)
+            {
+                OE_NOTICE << "   Previous location = " << std::setprecision(10) << prevLocation.GetX() << ", " << prevLocation.GetY() << ", " << prevLocation.GetZ() << std::endl;
+                OE_NOTICE << "   New location = " << std::setprecision(10) << entityState->GetEntityLocation().GetX() << ", " << entityState->GetEntityLocation().GetY() << ", " << entityState->GetEntityLocation().GetZ() << std::endl;
+                OE_NOTICE << " ID = " << record->getEntityState()->GetEntityIdentifier().GetEntityID() << std::endl;
+            }*/
+
             record->setEntityState( entityState );
+
         }
     }
     
@@ -199,7 +213,7 @@ void Simulation::updateSim()
 {                
     OpenThreads::ScopedLock< OpenThreads::Mutex > lk( _mutex );
     
-    std::vector<int> toRemove;
+    std::vector<EntityId> toRemove;
     
     for (EntityRecords::iterator itr = _entities.begin(); itr != _entities.end(); itr++)
     {
@@ -215,7 +229,7 @@ void Simulation::updateSim()
         }
     }
     
-    for (std::vector<int>::iterator it = toRemove.begin(); it != toRemove.end(); ++it)
+    for (std::vector<EntityId>::iterator it = toRemove.begin(); it != toRemove.end(); ++it)
     {
         osg::ref_ptr<EntityRecord> record = _entities[*it];
         _entityGroup->removeChild(record->getTrackNode());

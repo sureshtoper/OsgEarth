@@ -55,9 +55,32 @@ namespace osgEarth { namespace Sim {
         Entity_State_PDU* _state;
     };
 
-    typedef std::map< int, osg::ref_ptr< TrackNode > > TrackNodeMap;
+    struct EntityId
+    {
+        EntityId(int site, int application, int id):
+         _site( site),
+        _application(application),
+        _id(id)
+        {            
+        }        
 
-    typedef std::map< int, osg::ref_ptr< EntityRecord > > EntityRecords;
+         bool operator < (const EntityId& rhs) const 
+         {
+             if (_site < rhs._site) return true;
+             if (_site > rhs._site) return false;
+             if (_application < rhs._application) return true;
+             if (_application > rhs._application) return false;
+             return _id < rhs._id;
+         }
+
+        int _site;
+        int _application;
+        int _id;
+    };
+
+    typedef std::map< EntityId, osg::ref_ptr< TrackNode > > TrackNodeMap;
+
+    typedef std::map< EntityId, osg::ref_ptr< EntityRecord > > EntityRecords;
 
 
     /***************************************************************************/

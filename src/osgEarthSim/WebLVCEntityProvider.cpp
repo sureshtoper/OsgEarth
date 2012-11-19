@@ -32,6 +32,19 @@ using namespace osgEarth::Sim;
 
 WebLVCAttributeUpdateMessage::WebLVCAttributeUpdateMessage()
 {
+    std::fill(entityIdentifier, entityIdentifier+3, 0);
+    std::fill(entityType, entityType+7, 0);
+    std::fill(worldLocation, worldLocation+3, 0);
+    std::fill(velocityVector, velocityVector+3, 0);
+    std::fill(orientation, orientation+3, 0);
+    std::fill(angularVelocity, angularVelocity, 0);
+    std::fill(accelerationVector, accelerationVector+3, 0);
+
+    damageState = 0;
+    engineSmokeOn = false;
+    isConcealed = false;
+    forceId = 0;
+    deadReckoningAlgorithm = 0;           
 }    
 
 bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
@@ -44,7 +57,7 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
     int messageKind = doc.get("MessageKind", 0).asInt();
     if (messageKind != 1)
     {
-        std::cout << "Not an AttributeUpdate message" << std::endl;
+        OE_NOTICE <<  "Not an AttributeUpdate message" << std::endl;
         return false;
     }
 
@@ -57,14 +70,20 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
     forceId = doc.get("ForceIdentifier", 0).asInt();
     deadReckoningAlgorithm = doc.get("DeadReckoningAlgorithm", 0).asInt();
 
+
     //EntityIdentifer
     Json::Value entityIdentiferObj = doc.get("EntityIdentifier", Json::nullValue);
     if (entityIdentiferObj != Json::nullValue)
     {            
         for (unsigned int i = 0; i < 3; i++)
         {
-            entityIdentifier[i] = entityIdentiferObj[i].asInt();             
+            entityIdentifier[i] = entityIdentiferObj[i].asInt();                         
         }
+    }
+    else
+    {
+        OE_NOTICE << "No entityIdentifier" << std::endl;
+        return false;
     }
 
     //EntityType
@@ -76,6 +95,11 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
             entityType[i] = entityTypeObj[i].asInt();             
         }
     }
+    else
+    {
+        OE_NOTICE << "No EntityType" << std::endl;
+        return false;
+    }
 
     //WorldLocation
     Json::Value worldLocationObj = doc.get("WorldLocation", Json::nullValue);
@@ -85,6 +109,11 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
         {
             worldLocation[i] = worldLocationObj[i].asDouble();             
         }
+    }
+    else
+    {
+        OE_NOTICE << "No worldLocation" << std::endl;
+        return false;
     }
 
     //VelocityVector
@@ -96,6 +125,11 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
             velocityVector[i] = velocityVectorObj[i].asDouble();             
         }
     }
+    else
+    {
+        OE_NOTICE << "No velocity" << std::endl;
+        return false;
+    }
 
     //Orientation 
     Json::Value orientationObj = doc.get("Orientation", Json::nullValue);
@@ -106,6 +140,11 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
             orientation[i] = orientationObj[i].asDouble();             
         }
     }    
+    else
+    {
+        OE_NOTICE << "No orientation" << std::endl;
+        return false;
+    }
 
     //AccelerationVector
     Json::Value accelerationVectorObj = doc.get("AccelerationVector", Json::nullValue);
@@ -116,6 +155,11 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
             accelerationVector[i] = accelerationVectorObj[i].asDouble();             
         }
     } 
+    else
+    {
+        OE_NOTICE << "No acceleration" << std::endl;
+        return false;
+    }
 
     //AngularVelocity
     Json::Value angularVelocityObj = doc.get("AngularVelociy", Json::nullValue);
@@ -125,7 +169,7 @@ bool WebLVCAttributeUpdateMessage::parse(const std::string &message)
         {
             angularVelocity[i] = angularVelocityObj[i].asDouble();             
         }
-    } 
+    }     
 
     return true;          
 }
@@ -190,14 +234,13 @@ struct libwebsocket *wsi,
             ((char *)in)[len] = '\0';
             strncpy(buf, (char*)in, len+1);
             //fprintf(stderr, "rx %d '%s'\n", (int)len, (char *)in);
-            fprintf(stderr, "Got message %s\n", buf);
+            
             WebLVCAttributeUpdateMessage message;
-            message.parse( std::string(buf) );
-            if (entityProvider)
+            if (entityProvider && message.parse( std::string(buf) ) )
             {
-                OE_NOTICE << "Sending entity state" << std::endl;
+                OE_INFO << buf << std::endl;
                 entityProvider->sendEntityState( message.createEntityState() );
-            }
+            }            
             break;
         }
 
