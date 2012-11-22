@@ -25,6 +25,11 @@ public class osgViewer extends Activity implements View.OnKeyListener {
    
     //Main Android Activity life cycle
     @Override protected void onCreate(Bundle icicle) {
+    	
+		Log.w("osgNativeLib", "About to load lib");
+        System.loadLibrary("osgNativeLib");
+        Log.w("osgNativeLib", "Lib loaded");
+    	
         super.onCreate(icicle);
         setContentView(R.layout.ui_layout_gles);
         
@@ -128,7 +133,7 @@ public class osgViewer extends Activity implements View.OnKeyListener {
             return true;
         case R.id.menuChangeBackground:
         	Log.d(TAG,"Change background color");
-        	int[] test = new int [3];
+        	//int[] test = new int [3];
         	/*test = osgNativeLib.getClearColor();
         	backgroundColor = Color.rgb(test[0], test[1], test[2]);
         	

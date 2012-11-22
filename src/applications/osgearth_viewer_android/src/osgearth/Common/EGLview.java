@@ -15,7 +15,6 @@ package osgearth.Common;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import android.app.Dialog;
 import android.content.Context;
 import android.graphics.PixelFormat;
 import android.opengl.GLSurfaceView;
@@ -110,7 +109,7 @@ public class EGLview extends GLSurfaceView implements View.OnTouchListener, View
 	    	gestureDetector.onTouchEvent(event);
 	    	
 	    	//dumpEvent(event);
-	    	long time_arrival = event.getEventTime();
+	    	//long time_arrival = event.getEventTime();
 	    	int n_points = event.getPointerCount();
 	    	int action = event.getAction() & MotionEvent.ACTION_MASK;
 	    	
@@ -169,10 +168,10 @@ public class EGLview extends GLSurfaceView implements View.OnTouchListener, View
 	        // event when double tap occurs
 	        @Override
 	        public boolean onDoubleTap(MotionEvent event) {
-	            float x = event.getX();
-	            float y = event.getY();
+	            //float x = event.getX();
+	            //float y = event.getY();
 
-	            int touchID = event.getPointerId(0);
+	            //int touchID = event.getPointerId(0);
 	            //osgNativeLib.clearEventQueue();
 				//osgNativeLib.touchEndedEvent(touchID, event.getX(0), event.getY(0), 2);
 				tapcount = 2;

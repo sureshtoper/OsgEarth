@@ -12,6 +12,7 @@
 //
 #include <osgDB/FileUtils>
 
+
 #include <osgEarth/Viewpoint>
 #include <osgEarthUtil/EarthManipulator>
 #include <osgEarthUtil/AutoClipPlaneHandler>
@@ -45,9 +46,9 @@ public:
     }
     
     //return the skynode
-    osgEarth::Util::SkyNode* getSkyNode(){
+    /*osgEarth::Util::SkyNode* getSkyNode(){
         return _sky.get();
-    }
+    }*/
     
 protected:
     virtual ~DemoScene();
@@ -62,7 +63,7 @@ protected:
     osg::ref_ptr<osgViewer::Viewer> _viewer;
     
     //for convenience, not all demos use it
-    osg::ref_ptr<osgEarth::Util::SkyNode> _sky;
+    //osg::ref_ptr<osgEarth::Util::SkyNode> _sky;
 };
 
 

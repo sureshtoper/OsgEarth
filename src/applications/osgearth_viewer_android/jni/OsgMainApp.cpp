@@ -16,14 +16,13 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     __android_log_write(ANDROID_LOG_ERROR, "OSGANDROID",
             "Initializing geometry");
 
-    _notifyHandler = new OsgAndroidNotifyHandler();
+    /*_notifyHandler = new OsgAndroidNotifyHandler();
     _notifyHandler->setTag("Osg Viewer");
     osg::setNotifyHandler(_notifyHandler);
-    osgEarth::setNotifyHandler(_notifyHandler);
+    osgEarth::setNotifyHandler(_notifyHandler);*/
     
     //
-    osgEarth::Registry::instance()->setDefaultTerrainEngineDriverName("quadtree");
-    
+
     _scene = new DemoScene();
     _scene->init("", osg::Vec2(width, height), 0);
     
