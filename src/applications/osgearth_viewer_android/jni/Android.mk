@@ -6,18 +6,18 @@ LOCAL_MODULE    := osgNativeLib
 ### Main Install dir
 OSG_ANDROID_DIR		:= /Users/hogbox/Documents/AlphaPixel/androidPort/osg-gles2-android
 OSGEARTH_ANDROID_DIR	:= /Users/hogbox/Documents/AlphaPixel/androidPort/osgearth-android
-THIRDPARTY_ANDROID_DIR	:= /Users/hogbox/Documents/AlphaPixel/androidPort/osg-gles2-android/3rdparty/build
+THIRDPARTY_ANDROID_DIR	:= /Users/hogbox/Documents/AlphaPixel/androidPort/builds/3rdparty
 
 OSG_LIBDIR 			:= $(OSG_ANDROID_DIR)/obj/local/armeabi
 OSGEARTH_LIBDIR 		:= $(OSGEARTH_ANDROID_DIR)/obj/local/armeabi
-PNG_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/libpng/obj/local/armeabi
-TIFF_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/libtiff/obj/local/armeabi
-GDAL_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/gdal/obj/local/armeabi
-GEOS_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/geos/obj/local/armeabi
-PROJ_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/proj/obj/local/armeabi
-CURL_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/curl/obj/local/armeabi
-FREETYPE_LIBDIR 		:= $(THIRDPARTY_ANDROID_DIR)/freetype/obj/local/armeabi
-SQLITE_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/sqlite/obj/local/armeabi
+PNG_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
+TIFF_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
+GDAL_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
+GEOS_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
+PROJ_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
+CURL_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
+FREETYPE_LIBDIR 		:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
+SQLITE_LIBDIR 			:= $(THIRDPARTY_ANDROID_DIR)/obj/local/armeabi
 
 ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
 	LOCAL_ARM_NEON 	:= true
@@ -39,8 +39,9 @@ LOCAL_C_INCLUDES:= $(OSG_ANDROID_DIR)/include $(OSGEARTH_ANDROID_DIR)/src
 LOCAL_CFLAGS    := -Werror -fno-short-enums -DANDROID -DOSGEARTH_LIBRARY_STATIC
 LOCAL_CPPFLAGS  := -DOSG_LIBRARY_STATIC -DOSGEARTH_LIBRARY_STATIC -DANDROID
 
-LOCAL_LDLIBS    := -llog -lGLESv2 -lz -lgnustl_static -fuse-ld=gold
-LOCAL_SRC_FILES := osgNativeLib.cpp OsgMainApp.cpp OsgAndroidNotifyHandler.cpp EarthMultiTouchManipulator.cpp GLES2ShaderGenVisitor.cpp
+LOCAL_LDLIBS    := -llog -lGLESv2 -lz -lgnustl_static -ldl -fuse-ld=gold
+LOCAL_SRC_FILES := osgNativeLib.cpp OsgMainApp.cpp OsgAndroidNotifyHandler.cpp DemoScene.cpp osgEarthDemo.cpp
+
 LOCAL_LDFLAGS   := -L $(OSGEARTH_LIBDIR) \
 -losgdb_kml \
 -losgdb_osgearth_gdal \

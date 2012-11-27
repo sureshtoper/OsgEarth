@@ -1,83 +1,5 @@
 #include "OsgMainApp.hpp"
 
-#include <osgDB/FileUtils>
-#include <osgEarth/Capabilities>
-#include <osgEarthUtil/AutoClipPlaneHandler>
-#include <osgEarthUtil/ObjectLocator>
-#include <osgEarthDrivers/tms/TMSOptions>
-
-#include <osgDB/WriteFile>
-
-#include "GLES2ShaderGenVisitor.h"
-
-using namespace osgEarth;
-using namespace osgEarth::Drivers;
-using namespace osgEarth::Util;
-
-class ClampObjectLocatorCallback : public osgEarth::TerrainCallback
-{
-public:
-    ClampObjectLocatorCallback(ObjectLocatorNode* locator):
-    _locator(locator),
-    _maxLevel(-1),
-    _minLevel(0)
-    {
-    }
-    
-    virtual void onTileAdded(const osgEarth::TileKey& tileKey, osg::Node* terrain, TerrainCallbackContext&)
-    {
-        if ((int)tileKey.getLevelOfDetail() > _minLevel && _maxLevel < (int)tileKey.getLevelOfDetail())
-        {
-            osg::Vec3d position = _locator->getLocator()->getPosition();
-            
-            if (tileKey.getExtent().contains(position.x(), position.y()))
-            {
-                //Compute our location in geocentric
-                const osg::EllipsoidModel* ellipsoid = tileKey.getProfile()->getSRS()->getEllipsoid();
-                double x, y, z;
-                ellipsoid->convertLatLongHeightToXYZ(
-                                                     osg::DegreesToRadians(position.y()), osg::DegreesToRadians(position.x()), 0,
-                                                     x, y, z);
-                //Compute the up vector
-                osg::Vec3d up = ellipsoid->computeLocalUpVector(x, y, z );
-                up.normalize();
-                osg::Vec3d world(x, y, z);
-                
-                double segOffset = 50000;
-                
-                osg::Vec3d start = world + (up * segOffset);
-                osg::Vec3d end = world - (up * segOffset);
-                
-                osgUtil::LineSegmentIntersector* i = new osgUtil::LineSegmentIntersector( start, end );
-                
-                osgUtil::IntersectionVisitor iv;
-                iv.setIntersector( i );
-                terrain->accept( iv );
-                
-                osgUtil::LineSegmentIntersector::Intersections& results = i->getIntersections();
-                if ( !results.empty() )
-                {
-                    const osgUtil::LineSegmentIntersector::Intersection& result = *results.begin();
-                    osg::Vec3d hit = result.getWorldIntersectPoint();
-                    double lat, lon, height;
-                    ellipsoid->convertXYZToLatLongHeight(hit.x(), hit.y(), hit.z(),
-                                                         lat, lon, height);
-                    position.z() = height;
-                    //OE_NOTICE << "Got hit, setting new height to " << height << std::endl;
-                    _maxLevel = tileKey.getLevelOfDetail();
-                    _locator->getLocator()->setPosition( position );
-                }
-            }
-        }
-        
-    }
-    
-    osg::ref_ptr< ObjectLocatorNode > _locator;
-    int _maxLevel;
-    int _minLevel;
-};
-
-
 OsgMainApp::OsgMainApp(){
 
     _initialized = false;
@@ -94,21 +16,29 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     __android_log_write(ANDROID_LOG_ERROR, "OSGANDROID",
             "Initializing geometry");
 
-    //Pending
-    _notifyHandler = new OsgAndroidNotifyHandler();
+    /*_notifyHandler = new OsgAndroidNotifyHandler();
     _notifyHandler->setTag("Osg Viewer");
     osg::setNotifyHandler(_notifyHandler);
-    osgEarth::setNotifyHandler(_notifyHandler);
+    osgEarth::setNotifyHandler(_notifyHandler);*/
     
-    osg::setNotifyLevel(osg::FATAL);
-    osgEarth::setNotifyLevel(osg::INFO);
+    //
 
-    osg::notify(osg::ALWAYS)<<"Testing"<<std::endl;
+    _scene = new DemoScene();
+    _scene->init("", osg::Vec2(width, height), 0);
+    
+    
+    //Pending
+    /*
+    
+    osg::setNotifyLevel(osg::INFO);
+    osgEarth::setNotifyLevel(osg::FATAL);
+
+    osg::notify(osg::ALWAYS)<<"Testing Testing 1,2 1,2"<<std::endl;
 
     //::setenv("OSGEARTH_HTTP_DEBUG", "1", 1);
     //::setenv("OSGEARTH_DUMP_SHADERS", "1", 1);
     
-    osgEarth::Registry::instance()->setDefaultTerrainEngineDriverName("quadtree");
+    
     
     _bufferWidth = width;
     _bufferHeight = height;
@@ -128,10 +58,8 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     _viewer->getEventQueue()->getCurrentEventState()->setMouseYOrientation(osgGA::GUIEventAdapter::Y_INCREASING_UPWARDS);
 
     // install our default manipulator (do this before calling load)
-    //_viewer->setCameraManipulator( new osgEarth::Util::EarthMultiTouchManipulator() );
-    _viewer->setCameraManipulator( new osgEarth::Util::EarthManipulator() ); //EarthMultiTouchManipulator() );
+    _viewer->setCameraManipulator( new osgEarth::Util::EarthMultiTouchManipulator() );
     
-#if 0
     osg::Light* light = new osg::Light( 0 );
     light->setPosition( osg::Vec4(0, -1, 0, 0 ) );
     light->setAmbient( osg::Vec4(0.4f, 0.4f, 0.4f ,1.0) );
@@ -142,9 +70,11 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     material->setAmbient(osg::Material::FRONT, osg::Vec4(0.4,0.4,0.4,1.0));
     material->setDiffuse(osg::Material::FRONT, osg::Vec4(0.9,0.9,0.9,1.0));
     material->setSpecular(osg::Material::FRONT, osg::Vec4(0.4,0.4,0.4,1.0));
-#endif
     
-    osg::Node* node = osgDB::readNodeFile("http://readymap.org/readymap/maps/public/2.earth");
+    
+//    osg::Node* node = osgDB::readNodeFile("/storage/sdcard0/Download/tests/readymap.earth");//nexus7
+    //osg::Node* node = osgDB::readNodeFile("/mnt/sdcard/download/tests/readymap.earth");//S2
+    osg::Node* node = osgDB::readNodeFile("/mnt/sdcard/external_sd/tests/readymap.earth");//S2
     if ( !node )
     {
         OSG_ALWAYS << "Unable to load an earth file from the command line." << std::endl;
@@ -170,32 +100,26 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
     root->addChild( mapNode.get() );
     //root->getOrCreateStateSet()->setAttribute(light);
     
-#if 0
     //have to add these
     root->getOrCreateStateSet()->setAttribute(material);
     //root->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
-#endif
+    
     double hours = 12.0f;
     float ambientBrightness = 0.4f;
     osgEarth::Util::SkyNode* sky = new osgEarth::Util::SkyNode( mapNode->getMap() );
     sky->setAmbientBrightness( ambientBrightness );
     sky->setDateTime( 1984, 11, 8, hours );
-    sky->attach( _viewer );
+    sky->attach( _viewer, 0 );
     root->addChild( sky );
-
-
-    root->getOrCreateStateSet()->setMode(GL_LIGHTING,
-    		osg::StateAttribute::OFF | osg::StateAttribute::OVERRIDE);
+        
     
     //for some reason we have to do this as global stateset doesn't
     //appear to be in the statesetstack
     root->getOrCreateStateSet()->setAttribute(_viewer->getLight());
     
     _viewer->setSceneData( root );
-
-    _viewer->setRunFrameScheme( osgViewer::ViewerBase::ON_DEMAND );
-
-    _viewer->realize();
+*/
+    //_viewer->realize();
 
     _initialized = true;
 
@@ -203,7 +127,7 @@ void OsgMainApp::initOsgWindow(int x,int y,int width,int height){
 //Draw
 void OsgMainApp::draw(){
 
-    _viewer->frame();
+    _scene->frame();
     
     //clear events for next frame
     _frameTouchBeganEvents = NULL;
@@ -214,8 +138,8 @@ void OsgMainApp::draw(){
 static bool flipy = true;
 void OsgMainApp::touchBeganEvent(int touchid,float x,float y){
     if (!_frameTouchBeganEvents.valid()) {
-        if(_viewer.valid()){
-            _frameTouchBeganEvents = _viewer->getEventQueue()->touchBegan(touchid, osgGA::GUIEventAdapter::TOUCH_BEGAN, x, flipy ? _bufferHeight-y : y);
+        if(_scene->getViewer()){
+            _frameTouchBeganEvents = _scene->getViewer()->getEventQueue()->touchBegan(touchid, osgGA::GUIEventAdapter::TOUCH_BEGAN, x, flipy ? _bufferHeight-y : y);
         }
     } else {
         _frameTouchBeganEvents->addTouchPoint(touchid, osgGA::GUIEventAdapter::TOUCH_BEGAN, x, flipy ? _bufferHeight-y : y);
@@ -223,8 +147,8 @@ void OsgMainApp::touchBeganEvent(int touchid,float x,float y){
 }
 void OsgMainApp::touchMovedEvent(int touchid,float x,float y){
     if (!_frameTouchMovedEvents.valid()) {
-        if(_viewer.valid()){
-            _frameTouchMovedEvents = _viewer->getEventQueue()->touchMoved(touchid, osgGA::GUIEventAdapter::TOUCH_MOVED, x, flipy ? _bufferHeight-y : y);
+        if(_scene->getViewer()){
+            _frameTouchMovedEvents = _scene->getViewer()->getEventQueue()->touchMoved(touchid, osgGA::GUIEventAdapter::TOUCH_MOVED, x, flipy ? _bufferHeight-y : y);
         }
     } else {
         _frameTouchMovedEvents->addTouchPoint(touchid, osgGA::GUIEventAdapter::TOUCH_MOVED, x, flipy ? _bufferHeight-y : y);
@@ -232,18 +156,18 @@ void OsgMainApp::touchMovedEvent(int touchid,float x,float y){
 }
 void OsgMainApp::touchEndedEvent(int touchid,float x,float y,int tapcount){
     if (!_frameTouchEndedEvents.valid()) {
-        if(_viewer.valid()){
-            _frameTouchEndedEvents = _viewer->getEventQueue()->touchEnded(touchid, osgGA::GUIEventAdapter::TOUCH_ENDED, x, flipy ? _bufferHeight-y : y,tapcount);
+        if(_scene->getViewer()){
+            _frameTouchEndedEvents = _scene->getViewer()->getEventQueue()->touchEnded(touchid, osgGA::GUIEventAdapter::TOUCH_ENDED, x, flipy ? _bufferHeight-y : y,tapcount);
         }
     } else {
         _frameTouchEndedEvents->addTouchPoint(touchid, osgGA::GUIEventAdapter::TOUCH_ENDED, x, flipy ? _bufferHeight-y : y,tapcount);
     }
 }
 void OsgMainApp::keyboardDown(int key){
-    _viewer->getEventQueue()->keyPress(key);
+    _scene->getViewer()->getEventQueue()->keyPress(key);
 }
 void OsgMainApp::keyboardUp(int key){
-    _viewer->getEventQueue()->keyRelease(key);
+    _scene->getViewer()->getEventQueue()->keyRelease(key);
 }
 
 void OsgMainApp::clearEventQueue()
@@ -254,5 +178,5 @@ void OsgMainApp::clearEventQueue()
     _frameTouchEndedEvents = NULL;
     
     //clear the viewers queue
-    _viewer->getEventQueue()->clear();
+    _scene->getViewer()->getEventQueue()->clear();
 }
