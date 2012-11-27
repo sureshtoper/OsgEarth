@@ -19,6 +19,9 @@ SET(TARGET_H
     CachePolicy
     CacheSeed
     Capabilities
+    ClampableNode
+    ClampingTechnique
+    ClampingBinTechnique
     ColorFilter
     Common
     CompositeTileSource
@@ -30,6 +33,7 @@ SET(TARGET_H
     DPLineSegmentIntersector
     Draggers
     DrapeableNode
+    DrapingTechnique
     DrawInstanced
     ECEF
     ElevationLayer
@@ -73,6 +77,7 @@ SET(TARGET_H
     Notify
     optional
     OverlayDecorator
+    OverlayNode
     Pickers
     Profile
     Progress
@@ -134,6 +139,9 @@ SET(TARGET_SRC
     CachePolicy.cpp
     CacheSeed.cpp
     Capabilities.cpp
+    ClampableNode.cpp
+    ClampingTechnique.cpp
+    ClampingBinTechnique.cpp
     ColorFilter.cpp
     CompositeTileSource.cpp
     Config.cpp
@@ -143,6 +151,7 @@ SET(TARGET_SRC
     Draggers.cpp
     DPLineSegmentIntersector.cpp
     DrapeableNode.cpp
+    DrapingTechnique.cpp
     DrawInstanced.cpp
     ECEF.cpp
     ElevationLayer.cpp
@@ -181,6 +190,7 @@ SET(TARGET_SRC
     NodeUtils.cpp
     Notify.cpp
     OverlayDecorator.cpp
+    OverlayNode.cpp
     Pickers.cpp
     Profile.cpp
     Progress.cpp

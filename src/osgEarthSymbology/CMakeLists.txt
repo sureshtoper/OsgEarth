@@ -38,6 +38,7 @@ SET(TARGET_H
     PointSymbol
     PolygonSymbol
     Query
+    RenderSymbol
     Resource
     ResourceCache
     ResourceLibrary
@@ -46,7 +47,6 @@ SET(TARGET_H
     Style
     StyleSelector
     StyleSheet
-    SLD
     Symbol
     Tags
     TextSymbol
@@ -77,6 +77,7 @@ SET(TARGET_SRC
     PointSymbol.cpp
     PolygonSymbol.cpp
     Query.cpp
+    RenderSymbol.cpp
     Resource.cpp
     ResourceCache.cpp
     ResourceLibrary.cpp
@@ -85,7 +86,6 @@ SET(TARGET_SRC
     Style.cpp
     StyleSelector.cpp
     StyleSheet.cpp
-    SLD.cpp
     Symbol.cpp
     TextSymbol.cpp
 )
