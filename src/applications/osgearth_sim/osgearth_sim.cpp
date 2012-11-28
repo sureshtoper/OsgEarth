@@ -90,7 +90,7 @@ createControls( osgViewer::View* view )
     // title bar
     VBox* vbox = canvas->addControl(new VBox(Control::ALIGN_NONE, Control::ALIGN_BOTTOM, 2, 1 ));
     vbox->setBackColor( Color(Color::Black, 0.5) );
-    vbox->addControl( new LabelControl("osgEarth StealthViewer", Color::Yellow) );
+    vbox->addControl( new LabelControl("osgEarth sim", Color::Yellow) );
     
     // checkbox that toggles decluttering of tracks
     struct ToggleDecluttering : public ControlEventHandler {
@@ -234,10 +234,10 @@ main(int argc, char** argv)
     }                
 
     //Connect a simulation to the entity provider
-    osg::ref_ptr< Simulation > simulation = new Simulation(mapNode, tracks,  entityProvider );    
+    osg::ref_ptr< Simulation > simulation = new Simulation(mapNode, tracks,  entityProvider );        
     simulation->setEntityTimeout( entityTimeout );
     //Start the entity provider
-    entityProvider->start();
+    entityProvider->start();    
 
 
     // Set up the automatic decluttering. setEnabled() activates decluttering for
