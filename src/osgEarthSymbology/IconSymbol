@@ -25,6 +25,7 @@
 
 namespace osgEarth { namespace Symbology
 {
+    class Style;
     class InstanceResource;
 
     /**
@@ -71,6 +72,7 @@ namespace osgEarth { namespace Symbology
     public:
         virtual Config getConfig() const;
         virtual void mergeConfig( const Config& conf );
+        static void parseSLD(const Config& c, class Style& style);
 
     public: // InstanceSymbol
         virtual InstanceResource* createResource() const;
