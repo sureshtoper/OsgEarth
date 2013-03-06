@@ -141,7 +141,7 @@ namespace
         osg::Vec3Array*               surfaceVerts;
         osg::Vec3Array*               normals;
         osg::Vec4Array*               surfaceElevData;
-        osg::Vec3Array*               surfaceDetailCoords;
+        osg::Vec2Array*               surfaceDetailCoords;
         unsigned                      numVerticesInSurface;
         osg::Vec2Array*               unifiedSurfaceTexCoords;
         osg::ref_ptr<osg::FloatArray> elevations;
@@ -322,7 +322,7 @@ namespace
         d.surfaceElevData = new osg::Vec4Array();
         d.surfaceElevData->reserve( d.numVerticesInSurface );
 
-        d.surfaceDetailCoords = new osg::Vec3Array();
+        d.surfaceDetailCoords = new osg::Vec2Array();
         d.surfaceDetailCoords->reserve( d.numVerticesInSurface );
         
         d.surface->setVertexAttribArray( osg::Drawable::ATTRIBUTE_6, d.surfaceElevData );
@@ -536,7 +536,7 @@ namespace
         {
             d.model->_tileLocator->unitToModel( lowerLeftNDC, lowerLeftMap );
         }
-        osg::Vec3d anchorCoords = osg::Vec3d( lowerLeftMap.x() / detailSize, lowerLeftMap.y() / detailSize, lowerLeftMap.z());
+        osg::Vec2d anchorCoords = osg::Vec2d( lowerLeftMap.x() / detailSize, lowerLeftMap.y() / detailSize);
         anchorCoords.x() = (int)anchorCoords.x();
         anchorCoords.y() = (int)anchorCoords.y();
         
@@ -651,9 +651,9 @@ namespace
                     
                     // This computes the texture coordinate in world coords.  We need to subtract the anchor texture coordinate
                     // to get them normalized to a sensible range within a tile to maintain precision
-                    osg::Vec3d detailCoords = osg::Vec3d( mapCoords.x() / detailSize, mapCoords.y() / detailSize, mapCoords.z());                                                           
+                    osg::Vec2d detailCoords = osg::Vec2d( mapCoords.x() / detailSize, mapCoords.y() / detailSize);                                                           
                     detailCoords -= anchorCoords;                                    
-                    (*d.surfaceDetailCoords).push_back( osg::Vec3f(detailCoords) );
+                    (*d.surfaceDetailCoords).push_back( osg::Vec2f(detailCoords) );
                 }
             }
         }
@@ -1034,7 +1034,7 @@ namespace
         osg::Vec3Array* skirtVerts = new osg::Vec3Array();
         osg::Vec3Array* skirtNormals = new osg::Vec3Array();
         osg::Vec4Array* skirtElevData = new osg::Vec4Array();
-        osg::Vec3Array* skirtDetailCoords = new osg::Vec3Array();
+        osg::Vec2Array* skirtDetailCoords = new osg::Vec2Array();
 
         skirtVerts->reserve( d.numVerticesInSkirt );
         skirtNormals->reserve( d.numVerticesInSkirt );
@@ -1069,7 +1069,7 @@ namespace
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
 
-                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                const osg::Vec2f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
                 skirtDetailCoords->push_back( detailCoords );
                 skirtDetailCoords->push_back( detailCoords );
 
@@ -1116,7 +1116,7 @@ namespace
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
 
-                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                const osg::Vec2f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
                 skirtDetailCoords->push_back( detailCoords );
                 skirtDetailCoords->push_back( detailCoords );
 
@@ -1163,7 +1163,7 @@ namespace
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
 
-                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                const osg::Vec2f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
                 skirtDetailCoords->push_back( detailCoords );
                 skirtDetailCoords->push_back( detailCoords );
 
@@ -1210,7 +1210,7 @@ namespace
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
 
-                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                const osg::Vec2f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
                 skirtDetailCoords->push_back( detailCoords );
                 skirtDetailCoords->push_back( detailCoords );
 

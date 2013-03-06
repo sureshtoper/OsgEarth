@@ -37,7 +37,7 @@ using namespace osgEarth::Util;
 
 const char* vertexShader =
     "varying   vec2  texcoord; \n"
-    "in vec3  osgearth_detailCoords; \n"    
+    "in vec2  osgearth_detailCoords; \n"    
 
     "void setupDetail() \n"
     "{ \n"
