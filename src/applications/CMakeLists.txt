@@ -57,6 +57,7 @@ IF(NOT ${OPENSCENEGRAPH_VERSION} VERSION_LESS "2.9.6")
 ENDIF()
 
 ADD_SUBDIRECTORY(osgearth_measure)
+ADD_SUBDIRECTORY(osgearth_detailtexture)
 ADD_SUBDIRECTORY(osgearth_controls)
 ADD_SUBDIRECTORY(osgearth_shadercomp)
 ADD_SUBDIRECTORY(osgearth_tilesource)

@@ -141,6 +141,7 @@ namespace
         osg::Vec3Array*               surfaceVerts;
         osg::Vec3Array*               normals;
         osg::Vec4Array*               surfaceElevData;
+        osg::Vec3Array*               surfaceDetailCoords;
         unsigned                      numVerticesInSurface;
         osg::Vec2Array*               unifiedSurfaceTexCoords;
         osg::ref_ptr<osg::FloatArray> elevations;
@@ -320,9 +321,17 @@ namespace
         // for each vertex, a vec4 containing a unit extrusion vector in [0..2] and the raw elevation in [3]
         d.surfaceElevData = new osg::Vec4Array();
         d.surfaceElevData->reserve( d.numVerticesInSurface );
+
+        d.surfaceDetailCoords = new osg::Vec3Array();
+        d.surfaceDetailCoords->reserve( d.numVerticesInSurface );
+        
         d.surface->setVertexAttribArray( osg::Drawable::ATTRIBUTE_6, d.surfaceElevData );
         d.surface->setVertexAttribBinding( osg::Drawable::ATTRIBUTE_6, osg::Geometry::BIND_PER_VERTEX );
         d.surface->setVertexAttribNormalize( osg::Drawable::ATTRIBUTE_6, false );
+
+        d.surface->setVertexAttribArray( osg::Drawable::ATTRIBUTE_7, d.surfaceDetailCoords );
+        d.surface->setVertexAttribBinding( osg::Drawable::ATTRIBUTE_7, osg::Geometry::BIND_PER_VERTEX );
+        d.surface->setVertexAttribNormalize( osg::Drawable::ATTRIBUTE_7, false );
         
         // temporary data structures for triangulation support
         d.elevations = new osg::FloatArray();
@@ -507,12 +516,33 @@ namespace
      * Iterate over the sampling grid and calculate the vertex positions and normals
      * for each sampling point.
      */
-    void createSurfaceGeometry( Data& d, TextureCompositor* compositor )
+    void createSurfaceGeometry( const osgEarth::Profile* profile, Data& d, TextureCompositor* compositor )
     {
         d.surfaceBound.init();
 
         osgTerrain::HeightFieldLayer* elevationLayer = d.model->_elevationData.getHFLayer();
 
+        double detailSize = 10;  
+
+        //Compute the anchor texture coordinate for the lower left of the tile
+        osg::Vec3d lowerLeftMap;
+        osg::Vec3d lowerLeftNDC(0.0, 0.0, 0.0);        
+        if (d.model->_tileLocator->getCoordinateSystemType() == osgTerrain::Locator::GEOCENTRIC)
+        {            
+            double scale = 1.0f/111319.0;
+            detailSize *= scale;
+            d.geoLocator->unitToModel( lowerLeftNDC, lowerLeftMap );    
+        }
+        else
+        {
+            d.model->_tileLocator->unitToModel( lowerLeftNDC, lowerLeftMap );
+        }
+        osg::Vec3d anchorCoords = osg::Vec3d( lowerLeftMap.x() / detailSize, lowerLeftMap.y() / detailSize, lowerLeftMap.z());
+        anchorCoords.x() = (int)anchorCoords.x();
+        anchorCoords.y() = (int)anchorCoords.y();
+        
+
+        
         // populate vertex and tex coord arrays    
         for(unsigned j=0; j < d.numRows; ++j)
         {
@@ -610,6 +640,21 @@ namespace
 
                     // store the unit extrusion vector and the raw height value.
                     (*d.surfaceElevData).push_back( osg::Vec4f(model_one.x(), model_one.y(), model_one.z(), heightValue) );
+
+                    //Setup the map coordinates
+                    osg::Vec3d mapCoords = model;
+                                       
+
+                    if (d.model->_tileLocator->getCoordinateSystemType() == osgTerrain::Locator::GEOCENTRIC)
+                    {
+                        d.geoLocator->unitToModel( ndc, mapCoords );                                                                          
+                    }                    
+                    
+                    // This computes the texture coordinate in world coords.  We need to subtract the anchor texture coordinate
+                    // to get them normalized to a sensible range within a tile to maintain precision
+                    osg::Vec3d detailCoords = osg::Vec3d( mapCoords.x() / detailSize, mapCoords.y() / detailSize, mapCoords.z());                                                           
+                    detailCoords -= anchorCoords;                                    
+                    (*d.surfaceDetailCoords).push_back( osg::Vec3f(detailCoords) );
                 }
             }
         }
@@ -990,10 +1035,12 @@ namespace
         osg::Vec3Array* skirtVerts = new osg::Vec3Array();
         osg::Vec3Array* skirtNormals = new osg::Vec3Array();
         osg::Vec4Array* skirtElevData = new osg::Vec4Array();
+        osg::Vec3Array* skirtDetailCoords = new osg::Vec3Array();
 
         skirtVerts->reserve( d.numVerticesInSkirt );
         skirtNormals->reserve( d.numVerticesInSkirt );
         skirtElevData->reserve( d.numVerticesInSkirt );
+        skirtDetailCoords->reserve( d.numVerticesInSkirt );
 
         Indices skirtBreaks;
         skirtBreaks.reserve( d.numVerticesInSkirt );
@@ -1022,6 +1069,10 @@ namespace
                 const osg::Vec4f& elevData = (*d.surfaceElevData)[orig_i];
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
+
+                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                skirtDetailCoords->push_back( detailCoords );
+                skirtDetailCoords->push_back( detailCoords );
 
                 if ( compositor->requiresUnitTextureSpace() )
                 {
@@ -1066,6 +1117,10 @@ namespace
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
 
+                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                skirtDetailCoords->push_back( detailCoords );
+                skirtDetailCoords->push_back( detailCoords );
+
                 if ( compositor->requiresUnitTextureSpace() )
                 {
                     d.unifiedSkirtTexCoords->push_back( (*d.unifiedSurfaceTexCoords)[orig_i] );
@@ -1108,6 +1163,10 @@ namespace
                 const osg::Vec4f& elevData = (*d.surfaceElevData)[orig_i];
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
+
+                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                skirtDetailCoords->push_back( detailCoords );
+                skirtDetailCoords->push_back( detailCoords );
 
                 if ( compositor->requiresUnitTextureSpace() )
                 {
@@ -1152,6 +1211,10 @@ namespace
                 skirtElevData->push_back( elevData );
                 skirtElevData->push_back( elevData - osg::Vec4f(0,0,0,skirtHeight) );
 
+                const osg::Vec3f& detailCoords = (*d.surfaceDetailCoords)[orig_i];
+                skirtDetailCoords->push_back( detailCoords );
+                skirtDetailCoords->push_back( detailCoords );
+
                 if ( compositor->requiresUnitTextureSpace() )
                 {
                     d.unifiedSkirtTexCoords->push_back( (*d.unifiedSurfaceTexCoords)[orig_i] );
@@ -1183,6 +1246,9 @@ namespace
         d.skirt->setVertexAttribBinding  (osg::Drawable::ATTRIBUTE_6, osg::Geometry::BIND_PER_VERTEX);
         d.skirt->setVertexAttribNormalize(osg::Drawable::ATTRIBUTE_6, false);
 
+        d.skirt->setVertexAttribArray    (osg::Drawable::ATTRIBUTE_7, skirtDetailCoords );
+        d.skirt->setVertexAttribBinding  (osg::Drawable::ATTRIBUTE_7, osg::Geometry::BIND_PER_VERTEX);
+        d.skirt->setVertexAttribNormalize(osg::Drawable::ATTRIBUTE_7, false);
 
         // GW: not sure why this break stuff is here...?
 #if 0
@@ -1845,7 +1911,7 @@ TileModelCompiler::compile(const TileModel* model,
     setupTextureAttributes( d, _texCompositor.get(), _cache );
 
     // calculate the vertex and normals for the surface geometry.
-    createSurfaceGeometry( d, _texCompositor.get() );
+    createSurfaceGeometry( model->_tileKey.getProfile(), d, _texCompositor.get() );    
 
     // build geometry for the masked areas, if applicable
     if ( d.maskRecords.size() > 0 )
@@ -1865,8 +1931,16 @@ TileModelCompiler::compile(const TileModel* model,
     // create the StateSet that will active texture composition.
     osg::StateSet* stateSet = createStateSet( d, _texCompositor.get() );
 
+    //Get the lower left
+    double detailSize = 500.0;    
+    osg::Vec3d coords = osg::Vec3d(d.centerModel.x() / detailSize, d.centerModel.y() / detailSize, d.centerModel.z());
+    coords.x() = fmod( coords.x(), detailSize);
+    coords.y() = fmod( coords.y() , detailSize);    
+    stateSet->getOrCreateUniform("osg_tileOffset", osg::Uniform::FLOAT_VEC2)->set( osg::Vec2f( coords.x(), coords.y()));    
+
     if ( stateSet )
         xform->setStateSet( stateSet );
+  
 
 
     // lastly, optimize the results.
