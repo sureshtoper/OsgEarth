@@ -516,19 +516,18 @@ namespace
      * Iterate over the sampling grid and calculate the vertex positions and normals
      * for each sampling point.
      */
-    void createSurfaceGeometry( const osgEarth::Profile* profile, Data& d, TextureCompositor* compositor )
+    void createSurfaceGeometry( Data& d, TextureCompositor* compositor, double detailSize )
     {
         d.surfaceBound.init();
 
-        osgTerrain::HeightFieldLayer* elevationLayer = d.model->_elevationData.getHFLayer();
-
-        double detailSize = 10;  
+        osgTerrain::HeightFieldLayer* elevationLayer = d.model->_elevationData.getHFLayer();        
 
         //Compute the anchor texture coordinate for the lower left of the tile
         osg::Vec3d lowerLeftMap;
         osg::Vec3d lowerLeftNDC(0.0, 0.0, 0.0);        
         if (d.model->_tileLocator->getCoordinateSystemType() == osgTerrain::Locator::GEOCENTRIC)
         {            
+            //If we are in geocentric space, conver the size of the texture from meters to approximate degrees.
             double scale = 1.0f/111319.0;
             detailSize *= scale;
             d.geoLocator->unitToModel( lowerLeftNDC, lowerLeftMap );    
@@ -1911,7 +1910,7 @@ TileModelCompiler::compile(const TileModel* model,
     setupTextureAttributes( d, _texCompositor.get(), _cache );
 
     // calculate the vertex and normals for the surface geometry.
-    createSurfaceGeometry( model->_tileKey.getProfile(), d, _texCompositor.get() );    
+    createSurfaceGeometry( d, _texCompositor.get(), *_options.detailSize() );    
 
     // build geometry for the masked areas, if applicable
     if ( d.maskRecords.size() > 0 )
@@ -1931,17 +1930,9 @@ TileModelCompiler::compile(const TileModel* model,
     // create the StateSet that will active texture composition.
     osg::StateSet* stateSet = createStateSet( d, _texCompositor.get() );
 
-    //Get the lower left
-    double detailSize = 500.0;    
-    osg::Vec3d coords = osg::Vec3d(d.centerModel.x() / detailSize, d.centerModel.y() / detailSize, d.centerModel.z());
-    coords.x() = fmod( coords.x(), detailSize);
-    coords.y() = fmod( coords.y() , detailSize);    
-    stateSet->getOrCreateUniform("osg_tileOffset", osg::Uniform::FLOAT_VEC2)->set( osg::Vec2f( coords.x(), coords.y()));    
-
     if ( stateSet )
         xform->setStateSet( stateSet );
-  
-
+ 
 
     // lastly, optimize the results.
 

@@ -35,7 +35,8 @@ namespace osgEarth { namespace Drivers
             _lodFallOff  ( 0.0 ),
             _normalizeEdges( false ),
             _rangeMode( osg::LOD::DISTANCE_FROM_EYE_POINT ),
-            _tilePixelSize( 256 )
+            _tilePixelSize( 256 ),
+            _detailSize( 500 )
         {
             setDriver( "quadtree" );
             fromConfig( _conf );
@@ -63,6 +64,9 @@ namespace osgEarth { namespace Drivers
         optional<float>& tilePixelSize() { return _tilePixelSize; }
         const optional<float>& tilePixelSize() const { return _tilePixelSize; }
 
+        optional<double>& detailSize() { return _detailSize; }
+        const optional<double>& detailSize() const { return _detailSize; }
+
     protected:
         virtual Config getConfig() const {
             Config conf = TerrainOptions::getConfig();
@@ -73,6 +77,7 @@ namespace osgEarth { namespace Drivers
             conf.updateIfSet( "tile_pixel_size", _tilePixelSize );
             conf.updateIfSet( "range_mode", "PIXEL_SIZE_ON_SCREEN", _rangeMode, osg::LOD::PIXEL_SIZE_ON_SCREEN );
             conf.updateIfSet( "range_mode", "DISTANCE_FROM_EYE_POINT", _rangeMode, osg::LOD::DISTANCE_FROM_EYE_POINT);
+            conf.updateIfSet( "detail_size", _detailSize);
 
             return conf;
         }
@@ -89,6 +94,7 @@ namespace osgEarth { namespace Drivers
             conf.getIfSet( "lod_fall_off", _lodFallOff );
             conf.getIfSet( "normalize_edges", _normalizeEdges );
             conf.getIfSet( "tile_pixel_size", _tilePixelSize );
+            conf.getIfSet( "detail_size", _detailSize );
 
             conf.getIfSet( "range_mode", "PIXEL_SIZE_ON_SCREEN", _rangeMode, osg::LOD::PIXEL_SIZE_ON_SCREEN );
             conf.getIfSet( "range_mode", "DISTANCE_FROM_EYE_POINT", _rangeMode, osg::LOD::DISTANCE_FROM_EYE_POINT);
@@ -100,6 +106,7 @@ namespace osgEarth { namespace Drivers
         optional<bool> _normalizeEdges;
         optional<osg::LOD::RangeMode> _rangeMode;
         optional<float> _tilePixelSize;
+        optional<double> _detailSize;
     };
 
 } } // namespace osgEarth::Drivers
