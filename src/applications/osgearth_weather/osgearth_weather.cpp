@@ -236,6 +236,15 @@ void initGUI()
     s_layerBox->setControl( 3, row, s_timeLabel );
 }
 
+int  
+usage( const std::string& msg )
+{
+    OE_NOTICE << msg << std::endl;
+    OE_NOTICE << "USAGE: osgearth_weather" << std::endl;
+    OE_NOTICE << "   --altitudes <directory> Path to directory of exported altitudes full of grib files" << std::endl;                    
+    return -1;
+}
+
 
 
 
@@ -257,8 +266,7 @@ main(int argc, char** argv)
 
     if (altitudesDir.empty())
     {
-        OE_WARN << "Please provide an altitudes directory with --altitudes" << std::endl;
-        return 1;
+        return usage("Please provide an altitudes directory with --altitudes");        
     }
     else
     {
@@ -292,10 +300,18 @@ main(int argc, char** argv)
                 OE_NOTICE << "skipping altitude " << filename << " b/c it has " << altitude.layers.size() << " instead of " << numLayers << std::endl;
                 continue;
             }
-            altitude.addToMap( map );
-            numLayers = altitude.layers.size();
-            s_altitudes.push_back(altitude);
+            if (altitude.layers.size() > 0)
+            {
+                altitude.addToMap( map );
+                numLayers = altitude.layers.size();
+                s_altitudes.push_back(altitude);
+            }
         }
+    }
+
+    if (s_altitudes.size() == 0)
+    {
+        return usage("Failed to load any altitudes");
     }
     
 
