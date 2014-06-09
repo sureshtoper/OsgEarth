@@ -146,7 +146,9 @@ struct SelectAltitudeHandler : public ControlEventHandler
 
     void onValueChanged( Control* control, bool value ) {
         if (value) {
-            s_selectedAltitude = _index;            
+            s_selectedAltitude = _index;      
+            s_timeSlider->setMax(s_altitudes[0].layers.size()-1, false);
+            s_index = 0;
         }
 
         for (unsigned int i = 0; i < s_altitudes.size(); i++)
@@ -224,7 +226,7 @@ void initGUI()
 
 
     // an opacity slider
-    s_timeSlider = new HSliderControl( 0.0f, s_altitudes[0].layers.size()-1, 0.0f  );
+    s_timeSlider = new HSliderControl( 0.0f, s_altitudes[0].layers.size()-1, 0.0f  );    
     s_timeSlider->setWidth( 125 );
     s_timeSlider->setHeight( 12 );
     s_timeSlider->setVertAlign( Control::ALIGN_CENTER );
@@ -295,11 +297,6 @@ main(int argc, char** argv)
             Altitude altitude;
             // Load up the altitudes
             altitude.load(filename);            
-            if (s_altitudes.size() > 0 && numLayers != altitude.layers.size())
-            {
-                OE_NOTICE << "skipping altitude " << filename << " b/c it has " << altitude.layers.size() << " instead of " << numLayers << std::endl;
-                continue;
-            }
             if (altitude.layers.size() > 0)
             {
                 altitude.addToMap( map );
@@ -348,7 +345,7 @@ main(int argc, char** argv)
                 s_index++;
 
                 // Assume all the layers have the same size
-                if (s_index >= s_altitudes[0].layers.size())
+                if (s_index >= s_altitudes[s_selectedAltitude].layers.size())
                 {
                     s_index = 0;
                 } 
