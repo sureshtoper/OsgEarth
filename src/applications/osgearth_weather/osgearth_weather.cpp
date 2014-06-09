@@ -111,6 +111,10 @@ typedef std::vector< Altitude > AltitudeVector;
 static Grid* s_layerBox = NULL;
 unsigned int s_selectedAltitude = 0;
 AltitudeVector s_altitudes;
+unsigned int s_index = 0;
+bool s_autoPlay = true;
+HSliderControl* s_timeSlider = 0;
+LabelControl* s_timeLabel = 0;
 
 
 
@@ -153,9 +157,41 @@ struct SelectAltitudeHandler : public ControlEventHandler
     unsigned int _index;
 };
 
+struct TimeChangedHandler : public ControlEventHandler
+{
+    TimeChangedHandler()
+    {
+    }
+
+    void onValueChanged( Control* control, float value ) {
+        s_index = (int)value;
+    }    
+};
+
+struct AutoPlayHandler : public ControlEventHandler
+{
+    AutoPlayHandler() 
+    {
+    }
+
+    void onValueChanged( Control* control, bool value ) {
+        s_autoPlay = value;
+    }
+};
+
+
+
 void initGUI()
 {    
     unsigned int row = 0;
+
+    //The overlay name
+    LabelControl* header = new LabelControl( "Altitudes");      
+    header->setVertAlign( Control::ALIGN_CENTER );
+    header->setFontSize(22.0f);
+    header->setForeColor(255,255,0,255);
+    s_layerBox->setControl( 1, row, header );
+    row++;
 
     for (unsigned int i = 0; i < s_altitudes.size(); i++)
     {
@@ -173,6 +209,31 @@ void initGUI()
         s_layerBox->setControl( 1, row, name );
         row++;
     }
+
+    row++;
+
+
+    CheckBoxControl* autoPlay = new CheckBoxControl( s_autoPlay);
+    autoPlay->addEventHandler( new AutoPlayHandler() );
+    autoPlay->setVertAlign( Control::ALIGN_CENTER );
+    s_layerBox->setControl( 0, row, autoPlay );        
+
+    LabelControl* autoPlayLabel = new LabelControl( "Autoplay");      
+    autoPlayLabel->setVertAlign( Control::ALIGN_CENTER );
+    s_layerBox->setControl( 1, row, autoPlayLabel );
+
+
+    // an opacity slider
+    s_timeSlider = new HSliderControl( 0.0f, s_altitudes[0].layers.size()-1, 0.0f  );
+    s_timeSlider->setWidth( 125 );
+    s_timeSlider->setHeight( 12 );
+    s_timeSlider->setVertAlign( Control::ALIGN_CENTER );
+    s_timeSlider->addEventHandler( new TimeChangedHandler() );
+    s_layerBox->setControl( 2, row, s_timeSlider );
+
+    s_timeLabel = new LabelControl();
+    autoPlayLabel->setVertAlign( Control::ALIGN_CENTER );
+    s_layerBox->setControl( 3, row, s_timeLabel );
 }
 
 
@@ -258,29 +319,32 @@ main(int argc, char** argv)
     helper.configureView( &viewer );
     helper.parse(mapNode, arguments, &viewer, root, s_layerBox);        
 
-
-    // Setup the control box
-    //root->addChild( createControlPanel(&viewer) );
-
     initGUI();
-
-    unsigned int index = 0;
 
     while (!viewer.done())
     {
         // Animate the overlays
         if (viewer.getFrameStamp()->getFrameNumber() % 20 == 0)
         {
-            // Increment the index
-            index++;
+            // Increment the index if we're autoplaying
+            if (s_autoPlay)
+            {            
+                s_index++;
 
-            // Assume all the layers have the same size
-            if (index >= s_altitudes[0].layers.size())
-            {
-                index = 0;
-            }            
+                // Assume all the layers have the same size
+                if (s_index >= s_altitudes[0].layers.size())
+                {
+                    s_index = 0;
+                } 
+                s_timeSlider->setValue(s_index, false);
+            }
 
-            OE_NOTICE << "Showing layer " << index << " of altitude " << s_selectedAltitude << std::endl;
+            std::stringstream buf;
+            buf << "Time: " << s_index << std::endl;
+
+            s_timeLabel->setText(buf.str());
+
+            OE_NOTICE << "Showing layer " << s_index << " of altitude " << s_selectedAltitude << std::endl;
 
             // Only update the selected altitude
             for (unsigned int i = 0; i < s_altitudes.size(); i++)
@@ -291,7 +355,7 @@ main(int argc, char** argv)
                 }
                 else
                 {                    
-                    s_altitudes[i].show(index);
+                    s_altitudes[i].show(s_index);
                 }
             } 
         }
