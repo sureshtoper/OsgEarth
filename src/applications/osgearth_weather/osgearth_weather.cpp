@@ -146,8 +146,7 @@ struct SelectAltitudeHandler : public ControlEventHandler
 
     void onValueChanged( Control* control, bool value ) {
         if (value) {
-            s_selectedAltitude = _index;      
-            s_timeSlider->setMax(s_altitudes[0].layers.size()-1, false);
+            s_selectedAltitude = _index;            
             s_index = 0;
         }
 
@@ -195,6 +194,8 @@ void initGUI()
     s_layerBox->setControl( 1, row, header );
     row++;
 
+    unsigned int maxLayers = 0;
+
     for (unsigned int i = 0; i < s_altitudes.size(); i++)
     {
         Altitude& alt = s_altitudes[i];
@@ -210,6 +211,8 @@ void initGUI()
         name->setVertAlign( Control::ALIGN_CENTER );
         s_layerBox->setControl( 1, row, name );
         row++;
+
+        if (alt.layers.size() > maxLayers) maxLayers = alt.layers.size();
     }
 
     row++;
@@ -224,9 +227,8 @@ void initGUI()
     autoPlayLabel->setVertAlign( Control::ALIGN_CENTER );
     s_layerBox->setControl( 1, row, autoPlayLabel );
 
-
     // an opacity slider
-    s_timeSlider = new HSliderControl( 0.0f, s_altitudes[0].layers.size()-1, 0.0f  );    
+    s_timeSlider = new HSliderControl( 0.0f, maxLayers-1, 0.0f  );    
     s_timeSlider->setWidth( 125 );
     s_timeSlider->setHeight( 12 );
     s_timeSlider->setVertAlign( Control::ALIGN_CENTER );
@@ -368,7 +370,7 @@ main(int argc, char** argv)
                 }
                 else
                 {                    
-                    s_altitudes[i].show(s_index);
+                    s_altitudes[i].show(osg::minimum(s_index, s_altitudes[i].layers.size()-1));
                 }
             } 
         }
