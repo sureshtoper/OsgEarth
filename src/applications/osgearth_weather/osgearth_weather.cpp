@@ -18,6 +18,7 @@
 */
 #include <osg/Notify>
 #include <osgDB/FileNameUtils>
+#include <osgDB/FileUtils>
 #include <osgGA/GUIEventHandler>
 #include <osgGA/StateSetManipulator>
 #include <osgViewer/Viewer>
@@ -32,31 +33,150 @@
 using namespace osgEarth;
 using namespace osgEarth::Drivers;
 using namespace osgEarth::Util;
+using namespace osgEarth::Util::Controls;
 
-void loadAltitude(std::string directory, ImageLayerVector &layers)
+
+/**
+ * A collection of grib files at a given altitude
+ */
+struct Altitude
 {
-    CollectFilesVisitor v;
-    v.traverse(directory);
+    std::string name;
+    ImageLayerVector layers;
+    osg::ref_ptr< CheckBoxControl > control;
 
-    for (unsigned int i = 0; i < v.filenames.size(); i++)
+    bool load(std::string directory)
     {
-        std::string filename = v.filenames[i];
-        if (osgDB::getFileExtension(filename) == "gr1")
+        name = osgDB::getSimpleFileName(directory);        
+        CollectFilesVisitor v;
+        v.traverse(directory);
+
+        for (unsigned int i = 0; i < v.filenames.size(); i++)
         {
-            ColorRampOptions colorOpts;
-            colorOpts.ramp() = "../data/colorramps/temperature_c.clr";
+            std::string filename = v.filenames[i];
+            if (osgDB::getFileExtension(filename) == "gr1")
+            {
+                ColorRampOptions colorOpts;
+                colorOpts.ramp() = "../data/colorramps/temperature_c.clr";
 
-            GDALOptions gdalOpt;
-            gdalOpt.url() = filename;
+                GDALOptions gdalOpt;
+                gdalOpt.url() = filename;
 
-            
-            ElevationLayerOptions elevationOpt("", gdalOpt);
-            colorOpts.elevationLayer() = elevationOpt;
 
-            layers.push_back( new ImageLayer(colorOpts) );
+                ElevationLayerOptions elevationOpt("", gdalOpt);
+                colorOpts.elevationLayer() = elevationOpt;
+
+                layers.push_back( new ImageLayer(colorOpts) );                
+            }
+        }
+
+        OE_NOTICE << "Loaded " << layers.size() << " layers from " << directory << std::endl;
+
+        return !layers.empty();
+    }
+
+    void addToMap(Map* map)
+    {
+        for (unsigned int i = 0; i < layers.size(); i++)
+        {
+            ImageLayer* layer = layers[i].get();
+            layer->setVisible(false);
+            map->addImageLayer(layer);
         }
     }
+
+    void hideAll()
+    {
+        for (unsigned int i = 0; i < layers.size(); i++)
+        {
+            ImageLayer* layer = layers[i].get();
+            layer->setVisible(false);         
+        }
+    }
+
+    void show(int index)
+    {
+        hideAll();
+        if (index >= 0 && index < layers.size())
+        {
+            layers[index]->setVisible(true);
+        }
+    }
+};
+
+typedef std::vector< Altitude > AltitudeVector;
+
+
+
+static Grid* s_layerBox = NULL;
+unsigned int s_selectedAltitude = 0;
+AltitudeVector s_altitudes;
+
+
+
+osg::Node*
+createControlPanel( osgViewer::View* view )
+{
+    ControlCanvas* canvas = ControlCanvas::get( view );
+
+    // the outer container:
+    s_layerBox = new Grid();
+    s_layerBox->setBackColor(0,0,0,0.5);
+    s_layerBox->setMargin( 10 );
+    s_layerBox->setPadding( 10 );
+    s_layerBox->setChildSpacing( 10 );
+    s_layerBox->setChildVertAlign( Control::ALIGN_CENTER );
+    s_layerBox->setAbsorbEvents( true );
+    s_layerBox->setVertAlign( Control::ALIGN_TOP );
+
+    canvas->addControl( s_layerBox );    
+    return canvas;
 }
+
+struct SelectAltitudeHandler : public ControlEventHandler
+{
+    SelectAltitudeHandler( unsigned int index ) :
+        _index(index)
+        {
+        }
+
+    void onValueChanged( Control* control, bool value ) {
+        if (value) {
+            s_selectedAltitude = _index;            
+        }
+
+        for (unsigned int i = 0; i < s_altitudes.size(); i++)
+        {
+            s_altitudes[i].control->setValue( s_selectedAltitude == i );
+        }
+    }
+    unsigned int _index;
+};
+
+void initGUI()
+{    
+    unsigned int row = 0;
+
+    for (unsigned int i = 0; i < s_altitudes.size(); i++)
+    {
+        Altitude& alt = s_altitudes[i];
+        //Add some controls        
+        CheckBoxControl* enabled = new CheckBoxControl( i == 0 );
+        enabled->addEventHandler( new SelectAltitudeHandler(i) );
+        enabled->setVertAlign( Control::ALIGN_CENTER );
+        s_layerBox->setControl( 0, row, enabled );
+        alt.control = enabled;
+
+        //The overlay name
+        LabelControl* name = new LabelControl( alt.name );      
+        name->setVertAlign( Control::ALIGN_CENTER );
+        s_layerBox->setControl( 1, row, name );
+        row++;
+    }
+}
+
+
+
 
 int
 main(int argc, char** argv)
@@ -71,16 +191,53 @@ main(int argc, char** argv)
     imagery.url() = "http://readymap.org/readymap/tiles/1.0.0/22/";
     map->addImageLayer( new ImageLayer("ReadyMap imagery", imagery) );
 
+    std::string altitudesDir;
+    arguments.read("--altitudes", altitudesDir);
 
-    // Load up the altitudes
-    ImageLayerVector gribs;
-    loadAltitude("C:/geodata/NextGenFed/WeatherData/AirTemp5f", gribs);
-    for (unsigned int i = 0; i < gribs.size(); i++)
+    if (altitudesDir.empty())
     {
-        ImageLayer* layer = gribs[i].get();
-        layer->setVisible(i == 0);
-        map->addImageLayer(layer);
+        OE_WARN << "Please provide an altitudes directory with --altitudes" << std::endl;
+        return 1;
     }
+    else
+    {
+        OE_NOTICE << "Read altitudes from " << altitudesDir << std::endl;
+    }
+
+
+    std::vector<std::string> directories;
+    osgDB::DirectoryContents files = osgDB::getDirectoryContents(altitudesDir);
+    for( osgDB::DirectoryContents::const_iterator f = files.begin(); f != files.end(); ++f )
+    {
+        if ( f->compare(".") == 0 || f->compare("..") == 0 )
+            continue;
+
+        std::string filepath = osgDB::concatPaths( altitudesDir, *f );
+        directories.push_back( filepath );
+    }
+
+    unsigned int numLayers = 0;
+    for (unsigned int i = 0; i < directories.size(); i++)
+    {
+        std::string filename = directories[i];
+        if (osgDB::fileType(filename) == osgDB::DIRECTORY)
+        {
+            OE_NOTICE << "Loading altitude " << filename << std::endl;
+            Altitude altitude;
+            // Load up the altitudes
+            altitude.load(filename);            
+            if (s_altitudes.size() > 0 && numLayers != altitude.layers.size())
+            {
+                OE_NOTICE << "skipping altitude " << filename << " b/c it has " << altitude.layers.size() << " instead of " << numLayers << std::endl;
+                continue;
+            }
+            altitude.addToMap( map );
+            numLayers = altitude.layers.size();
+            s_altitudes.push_back(altitude);
+        }
+    }
+    
+
 
     // initialize a viewer:
     osgViewer::Viewer viewer(arguments);
@@ -89,15 +246,23 @@ main(int argc, char** argv)
 
     // make the map scene graph:
     osg::Group* root = new osg::Group();
-    viewer.setSceneData( root );
+    viewer.setSceneData( root );   
 
     MapNode* mapNode = new MapNode( map );
     root->addChild( mapNode );
+
+    createControlPanel(&viewer);
     
-    // Process cmdline args
+    // Process cmdline args    
     MapNodeHelper helper;
     helper.configureView( &viewer );
-    helper.parse(mapNode, arguments, &viewer, root, new LabelControl("Weather Explorer"));    
+    helper.parse(mapNode, arguments, &viewer, root, s_layerBox);        
+
+
+    // Setup the control box
+    //root->addChild( createControlPanel(&viewer) );
+
+    initGUI();
 
     unsigned int index = 0;
 
@@ -108,17 +273,27 @@ main(int argc, char** argv)
         {
             // Increment the index
             index++;
-            if (index >= gribs.size())
+
+            // Assume all the layers have the same size
+            if (index >= s_altitudes[0].layers.size())
             {
                 index = 0;
-            }
-            
-            // Now enable the correct layer
-            for (unsigned int i = 0; i < gribs.size(); i++)
-            {
-                ImageLayer* layer = gribs[i].get();
-                layer->setVisible(i == index );
             }            
+
+            OE_NOTICE << "Showing layer " << index << " of altitude " << s_selectedAltitude << std::endl;
+
+            // Only update the selected altitude
+            for (unsigned int i = 0; i < s_altitudes.size(); i++)
+            {
+                if (i != s_selectedAltitude)
+                {
+                    s_altitudes[i].hideAll();
+                }
+                else
+                {                    
+                    s_altitudes[i].show(index);
+                }
+            } 
         }
         viewer.frame();
     }
