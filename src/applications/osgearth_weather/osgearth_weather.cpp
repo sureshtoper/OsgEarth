@@ -257,18 +257,21 @@ main(int argc, char** argv)
 {
     osg::ArgumentParser arguments(&argc,argv);
 
-    // create the map.
-    Map* map = new Map();
+	// initialize a viewer:
+    osgViewer::Viewer viewer(arguments);
+    EarthManipulator* manip = new EarthManipulator();
+    viewer.setCameraManipulator( manip );
 
-    // add a TMS imagery layer:
-    TMSOptions imagery;
-    imagery.url() = "http://readymap.org/readymap/tiles/1.0.0/22/";
-    map->addImageLayer( new ImageLayer("ReadyMap imagery", imagery) );
+	createControlPanel(&viewer);
 
-	// add a TMS elevation layer:
-    TMSOptions elevation;
-    elevation.url() = "http://readymap.org/readymap/tiles/1.0.0/9/";
-    map->addElevationLayer( new ElevationLayer("ReadyMap elevation", elevation) );
+	osg::Node* node = MapNodeHelper().load(arguments, &viewer, s_layerBox);
+
+	MapNode* mapNode = MapNode::findMapNode(node);
+
+	// make the map scene graph:
+    osg::Group* root = new osg::Group();
+    viewer.setSceneData( root );   
+	root->addChild( node );
 
     std::string altitudesDir;
     arguments.read("--altitudes", altitudesDir);
@@ -306,7 +309,7 @@ main(int argc, char** argv)
             altitude.load(filename);            
             if (altitude.layers.size() > 0)
             {
-                altitude.addToMap( map );
+                altitude.addToMap( mapNode->getMap() );
                 numLayers = altitude.layers.size();
                 s_altitudes.push_back(altitude);
             }
@@ -317,27 +320,6 @@ main(int argc, char** argv)
     {
         return usage("Failed to load any altitudes");
     }
-    
-
-
-    // initialize a viewer:
-    osgViewer::Viewer viewer(arguments);
-    EarthManipulator* manip = new EarthManipulator();
-    viewer.setCameraManipulator( manip );
-
-    // make the map scene graph:
-    osg::Group* root = new osg::Group();
-    viewer.setSceneData( root );   
-
-    MapNode* mapNode = new MapNode( map );
-    root->addChild( mapNode );
-
-    createControlPanel(&viewer);
-    
-    // Process cmdline args    
-    MapNodeHelper helper;
-    helper.configureView( &viewer );
-    helper.parse(mapNode, arguments, &viewer, root, s_layerBox);        
 
     initGUI();
 
