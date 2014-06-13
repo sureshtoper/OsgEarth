@@ -29,11 +29,27 @@
 #include <osgEarthDrivers/tms/TMSOptions>
 #include <osgEarthDrivers/gdal/GDALOptions>
 #include <osgEarthDrivers/colorramp/ColorRampOptions>
+#include <osgEarthUtil/MGRSFormatter>
+#include <osgEarthUtil/Controls>
+#include <osgEarthUtil/AnnotationEvents>
+#include <osgEarthUtil/HTM>
+#include <osgEarthAnnotation/TrackNode>
+#include <osgEarthAnnotation/AnnotationData>
+#include <osgEarth/Random>
+#include <osgEarth/StringUtils>
+#include <osgEarth/ImageUtils>
+#include <osgEarth/GeoMath>
+#include <osgEarth/Units>
+#include <osgEarth/StringUtils>
+#include <osgEarth/Decluttering>
+#include <osgEarthSymbology/Color>
 
 using namespace osgEarth;
 using namespace osgEarth::Drivers;
 using namespace osgEarth::Util;
 using namespace osgEarth::Util::Controls;
+using namespace osgEarth::Annotation;
+using namespace osgEarth::Symbology;
 
 
 /**
@@ -115,6 +131,25 @@ unsigned int s_index = 0;
 bool s_autoPlay = true;
 HSliderControl* s_timeSlider = 0;
 LabelControl* s_timeLabel = 0;
+
+// field names for the track labels
+#define FIELD_NAME     "name"
+#define FIELD_POSITION "position"
+#define FIELD_NUMBER   "number"
+
+// icon to use, and size in pixels
+#define ICON_URL       "../data/m2525_air.png"
+#define ICON_SIZE      40
+
+// format coordinates as MGRS
+static MGRSFormatter s_format(MGRSFormatter::PRECISION_10000M);
+
+// globals for this demo
+osg::StateSet*      g_declutterStateSet = 0L;
+bool                g_showCoords        = true;
+optional<float>     g_duration          = 60.0;
+unsigned            g_numTracks         = 500;
+DeclutteringOptions g_dcOptions;
 
 
 
@@ -240,6 +275,135 @@ void initGUI()
     s_layerBox->setControl( 3, row, s_timeLabel );
 }
 
+
+/** A little track simulator that goes a simple great circle interpolation */
+struct TrackSim : public osg::Referenced
+{
+    TrackNode* _track;
+    Angular _startLat, _startLon, _endLat, _endLon;
+
+    void update( double t )
+    {
+        osg::Vec3d pos;
+        GeoMath::interpolate(
+            _startLat.as(Units::RADIANS), _startLon.as(Units::RADIANS),
+            _endLat.as(Units::RADIANS), _endLon.as(Units::RADIANS),
+            t,
+            pos.y(), pos.x() );
+
+        GeoPoint geo(
+            _track->getMapNode()->getMapSRS(),
+            osg::RadiansToDegrees(pos.x()),
+            osg::RadiansToDegrees(pos.y()),
+            10000.0,
+            ALTMODE_ABSOLUTE);
+
+        // update the position label.
+        _track->setPosition(geo);
+
+        if ( g_showCoords )
+        {
+            _track->setFieldValue( FIELD_POSITION, s_format(geo) );
+        }
+        else
+            _track->setFieldValue( FIELD_POSITION, "" );
+    }
+};
+typedef std::list< osg::ref_ptr<TrackSim> > TrackSims;
+
+
+/** Update operation that runs the simulators. */
+struct TrackSimUpdate : public osg::Operation
+{
+    TrackSimUpdate(TrackSims& sims) : osg::Operation( "tasksim", true ), _sims(sims) { }
+
+    void operator()( osg::Object* obj ) {
+        osg::View* view = dynamic_cast<osg::View*>(obj);
+        double t = fmod(view->getFrameStamp()->getSimulationTime(), (double)g_duration.get()) / (double)g_duration.get();
+        for( TrackSims::iterator i = _sims.begin(); i != _sims.end(); ++i )
+            i->get()->update( t );
+    }
+
+    TrackSims& _sims;
+};
+
+
+/**
+ * Creates a field schema that we'll later use as a labeling template for
+ * TrackNode instances.
+ */
+void
+createFieldSchema( TrackNodeFieldSchema& schema )
+{
+    // draw the track name above the icon:
+    TextSymbol* nameSymbol = new TextSymbol();
+    nameSymbol->pixelOffset()->set( 0, 2+ICON_SIZE/2 );
+    nameSymbol->alignment() = TextSymbol::ALIGN_CENTER_BOTTOM;
+    nameSymbol->halo()->color() = Color::Black;
+    nameSymbol->size() = nameSymbol->size().value() + 2.0f;
+    schema[FIELD_NAME] = TrackNodeField(nameSymbol, false); // false => static label (won't change after set)
+
+    // draw the track coordinates below the icon:
+    TextSymbol* posSymbol = new TextSymbol();
+    posSymbol->pixelOffset()->set( 0, -2-ICON_SIZE/2 );
+    posSymbol->alignment() = TextSymbol::ALIGN_CENTER_TOP;
+    posSymbol->fill()->color() = Color::Yellow;
+    posSymbol->size() = posSymbol->size().value() - 2.0f;
+    schema[FIELD_POSITION] = TrackNodeField(posSymbol, true); // true => may change at runtime
+
+    // draw some other field to the left:
+    TextSymbol* numberSymbol = new TextSymbol();
+    numberSymbol->pixelOffset()->set( -2-ICON_SIZE/2, 0 );
+    numberSymbol->alignment() = TextSymbol::ALIGN_RIGHT_CENTER;
+    schema[FIELD_NUMBER] = TrackNodeField(numberSymbol, false);
+}
+
+
+/** Builds a bunch of tracks. */
+void
+createTrackNodes( MapNode* mapNode, osg::Group* parent, const TrackNodeFieldSchema& schema, TrackSims& sims )
+{
+    // load an icon to use:
+    osg::ref_ptr<osg::Image> srcImage = osgDB::readImageFile( ICON_URL );
+    osg::ref_ptr<osg::Image> image;
+    ImageUtils::resizeImage( srcImage.get(), ICON_SIZE, ICON_SIZE, image );
+
+    // make some tracks, choosing a random simulation for each.
+    Random prng;
+    const SpatialReference* geoSRS = mapNode->getMapSRS()->getGeographicSRS();
+
+    for( unsigned i=0; i<g_numTracks; ++i )
+    {
+        double lon0 = -180.0 + prng.next() * 360.0;
+        double lat0 = -80.0 + prng.next() * 160.0;
+
+        GeoPoint pos(geoSRS, lon0, lat0);
+
+        TrackNode* track = new TrackNode(mapNode, pos, image, schema);
+
+        track->setFieldValue( FIELD_NAME,     Stringify() << "Track:" << i );
+        track->setFieldValue( FIELD_POSITION, Stringify() << s_format(pos) );
+        track->setFieldValue( FIELD_NUMBER,   Stringify() << (1 + prng.next(9)) );
+
+        // add a priority
+        AnnotationData* data = new AnnotationData();
+        data->setPriority( float(i) );
+        track->setAnnotationData( data );
+
+        parent->addChild( track );
+
+        // add a simulator for this guy
+        double lon1 = -180.0 + prng.next() * 360.0;
+        double lat1 = -80.0 + prng.next() * 160.0;
+        TrackSim* sim = new TrackSim();
+        sim->_track = track;        
+        sim->_startLat = lat0; sim->_startLon = lon0;
+        sim->_endLat = lat1; sim->_endLon = lon1;
+        sims.push_back( sim );
+    }
+}
+
+
 int  
 usage( const std::string& msg )
 {
@@ -322,6 +486,35 @@ main(int argc, char** argv)
     }
 
     initGUI();
+
+
+	//Initialize the tracks
+	// build a track field schema.
+    TrackNodeFieldSchema schema;
+    createFieldSchema( schema );
+
+    // create some track nodes.
+    TrackSims trackSims;
+    osg::Group* tracks = new osg::Group();
+    //HTMGroup* tracks = new HTMGroup();
+    createTrackNodes( mapNode, tracks, schema, trackSims );
+    root->addChild( tracks );
+
+    // Set up the automatic decluttering. setEnabled() activates decluttering for
+    // all drawables under that state set. We are also activating priority-based
+    // sorting, which looks at the AnnotationData::priority field for each drawable.
+    // (By default, objects are sorted by disatnce-to-camera.) Finally, we customize 
+    // a couple of the decluttering options to get the animation effects we want.
+    g_declutterStateSet = tracks->getOrCreateStateSet();
+    Decluttering::setEnabled( g_declutterStateSet, true );
+    g_dcOptions = Decluttering::getOptions();
+    g_dcOptions.inAnimationTime()  = 1.0f;
+    g_dcOptions.outAnimationTime() = 1.0f;
+    g_dcOptions.sortByPriority()   = true;
+    Decluttering::setOptions( g_dcOptions );
+
+    // attach the simulator to the viewer.
+    viewer.addUpdateOperation( new TrackSimUpdate(trackSims) );
 
     while (!viewer.done())
     {
