@@ -265,6 +265,11 @@ main(int argc, char** argv)
     imagery.url() = "http://readymap.org/readymap/tiles/1.0.0/22/";
     map->addImageLayer( new ImageLayer("ReadyMap imagery", imagery) );
 
+	// add a TMS elevation layer:
+    TMSOptions elevation;
+    elevation.url() = "http://readymap.org/readymap/tiles/1.0.0/9/";
+    map->addElevationLayer( new ElevationLayer("ReadyMap elevation", elevation) );
+
     std::string altitudesDir;
     arguments.read("--altitudes", altitudesDir);
 
