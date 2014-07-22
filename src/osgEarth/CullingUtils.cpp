@@ -21,6 +21,7 @@
 #include <osgEarth/VirtualProgram>
 #include <osgEarth/DPLineSegmentIntersector>
 #include <osgEarth/GeoData>
+#include <osgEarth/Utils>
 #include <osg/ClusterCullingCallback>
 #include <osg/PrimitiveSet>
 #include <osg/Geode>
@@ -840,9 +841,15 @@ ProxyCullVisitor::distance(const osg::Vec3& coord,const osg::Matrix& matrix)
 void 
 ProxyCullVisitor::handle_cull_callbacks_and_traverse(osg::Node& node)
 {
+#if OSG_VERSION_GREATER_THAN(3,3,1)
+    osg::Callback* callback = node.getCullCallback();
+    if (callback) callback->run(&node, this);
+    else traverse(node);
+#else
     osg::NodeCallback* callback = node.getCullCallback();
     if (callback) (*callback)(&node,this);
     else traverse(node);
+#endif
 }
 
 void 
@@ -926,12 +933,17 @@ ProxyCullVisitor::apply(osg::Geode& node)
     for(unsigned int i=0;i<node.getNumDrawables();++i)
     {
         osg::Drawable* drawable = node.getDrawable(i);
-        const osg::BoundingBox& bb =drawable->getBound();
+        const osg::BoundingBox& bb = Utils::getBoundingBox(drawable);
 
         if( drawable->getCullCallback() )
         {
+#if OSG_VERSION_GREATER_THAN(3,3,1)
+            if( drawable->getCullCallback()->run(drawable, _cv) == true )
+                continue;
+#else
             if( drawable->getCullCallback()->cull( _cv, drawable, &_cv->getRenderInfo() ) == true )
                 continue;
+#endif
         }
 
         //else
@@ -1089,4 +1101,32 @@ LODScaleGroup::traverse(osg::NodeVisitor& nv)
     }
 
     osg::Group::traverse( nv );
+}
+
+//------------------------------------------------------------------
+
+ClipToGeocentricHorizon::ClipToGeocentricHorizon(const osgEarth::SpatialReference* srs,
+                                                 osg::ClipPlane*                   clipPlane)
+{
+    _radius = std::min(
+        srs->getEllipsoid()->getRadiusPolar(),
+        srs->getEllipsoid()->getRadiusEquator() );
+
+    _clipPlane = clipPlane;
+}
+
+void
+ClipToGeocentricHorizon::operator()(osg::Node* node, osg::NodeVisitor* nv)
+{
+    osg::ref_ptr<osg::ClipPlane> clipPlane;
+    if ( _clipPlane.lock(clipPlane) )
+    {
+        osg::Vec3 eye = nv->getEyePoint();
+        double d = eye.length();
+        double a = acos(_radius/d);
+        double horizonRadius = _radius*cos(a);
+        eye.normalize();
+        clipPlane->setClipPlane(osg::Plane(eye, eye*horizonRadius));
+    }
+    traverse(node, nv);
 }

@@ -169,6 +169,7 @@ TileSourceOptions::getConfig() const
     conf.updateIfSet( "blacklist_filename", _blacklistFilename);
     conf.updateIfSet( "l2_cache_size", _L2CacheSize );
     conf.updateIfSet( "bilinear_reprojection", _bilinearReprojection );
+    conf.updateIfSet( "max_data_level", _maxDataLevel );
     conf.updateObjIfSet( "profile", _profileOptions );
     return conf;
 }
@@ -192,6 +193,7 @@ TileSourceOptions::fromConfig( const Config& conf )
     conf.getIfSet( "blacklist_filename", _blacklistFilename);
     conf.getIfSet( "l2_cache_size", _L2CacheSize );
     conf.getIfSet( "bilinear_reprojection", _bilinearReprojection );
+    conf.getIfSet( "max_data_level", _maxDataLevel );
     conf.getObjIfSet( "profile", _profileOptions );
 }
 
@@ -395,6 +397,23 @@ TileSource::createHeightField(const TileKey&        key,
 }
 
 bool
+TileSource::storeHeightField(const TileKey&     key,
+                             osg::HeightField*  hf,
+                              ProgressCallback* progress)
+{
+    if ( _status != STATUS_OK || hf == 0L )
+        return 0L;
+
+    ImageToHeightFieldConverter conv;
+    osg::ref_ptr<osg::Image> image = conv.convert(hf, 32);
+    if (image.valid())
+    {
+        return storeImage(key, image.get(), progress);
+    }
+    return false;
+}
+
+bool
 TileSource::isOK() const 
 {
     return _status == STATUS_OK;
@@ -416,6 +435,10 @@ bool
 TileSource::hasDataAtLOD( unsigned lod ) const
 {
     // the sematics here are really "MIGHT have data at LOD".
+
+    // Explicit max data level?
+    if ( _options.maxDataLevel().isSet() && lod > _options.maxDataLevel().value() )
+        return false;
 
     // If no data extents are provided, just return true
     if ( _dataExtents.size() == 0 )
@@ -476,10 +499,14 @@ TileSource::hasData(const osgEarth::TileKey& key) const
         lod = getProfile()->getEquivalentLOD( key.getProfile(), key.getLevelOfDetail() );        
     }
 
+    // Check the explicit max data override:
+    if (_options.maxDataLevel().isSet() && lod > _options.maxDataLevel().value())
+        return false;
+
+
     bool intersectsData = false;
     const osgEarth::GeoExtent& keyExtent = key.getExtent();
     
-
     for (DataExtentList::const_iterator itr = _dataExtents.begin(); itr != _dataExtents.end(); ++itr)
     {
         if ((keyExtent.intersects( *itr )) && 

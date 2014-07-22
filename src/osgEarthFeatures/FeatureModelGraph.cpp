@@ -1191,6 +1191,8 @@ FeatureModelGraph::checkForGlobalStyles( const Style& style )
             }
         }
     }
+    
+    const RenderSymbol* render = style.get<RenderSymbol>();
 
     if ( _clampable )
     {
@@ -1206,7 +1208,6 @@ FeatureModelGraph::checkForGlobalStyles( const Style& style )
         // check for explicit depth offset render settings (note, this could
         // override the automatic disable put in place by the presence of an
         // ExtrusionSymbol above)
-        const RenderSymbol* render = style.get<RenderSymbol>();
         if ( render && render->depthOffset().isSet() )
         {
             _clampable->setDepthOffsetOptions(*render->depthOffset());
@@ -1215,11 +1216,16 @@ FeatureModelGraph::checkForGlobalStyles( const Style& style )
 
     else 
     {
-        const RenderSymbol* render = style.get<RenderSymbol>();
         if ( render && render->depthOffset().isSet() )
         {
             _depthOffsetAdapter.setGraph( this );
             _depthOffsetAdapter.setDepthOffsetOptions( *render->depthOffset() );
+        }
+
+        // apply render order when draping:
+        if ( _drapeable && render && render->order().isSet() )
+        {
+            _drapeable->setRenderOrder( render->order()->eval() );
         }
     }
 }

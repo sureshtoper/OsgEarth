@@ -20,6 +20,7 @@
 #include <osgEarthFeatures/FeatureModelGraph>
 #include <osgEarth/SpatialReference>
 #include <osgEarth/ShaderFactory>
+#include <osgEarth/ShaderUtils>
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
 #include <osg/Notify>
@@ -252,6 +253,17 @@ FeatureNodeFactory::getOrCreateStyleGroup(const Style& style,
             group->getOrCreateStateSet()->setMode(
                 GL_CULL_FACE,
                 (render->backfaceCulling() == true ? osg::StateAttribute::ON : osg::StateAttribute::OFF) | osg::StateAttribute::OVERRIDE );
+        }
+
+        if ( render->clipPlane().isSet() )
+        {
+            GLenum mode = GL_CLIP_PLANE0 + (render->clipPlane().value());
+            group->getOrCreateStateSet()->setMode(mode, 1);
+        }
+
+        if ( render->minAlpha().isSet() )
+        {
+            DiscardAlphaFragments().install( group->getOrCreateStateSet(), render->minAlpha().value() );
         }
     }
 

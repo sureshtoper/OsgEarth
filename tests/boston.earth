@@ -80,7 +80,7 @@ to extruded buildings.
     </model>
     
     
-    <model name="Streets" driver="feature_geom" enabled="false">
+    <model name="Streets" driver="feature_geom" enabled="true">
         <features name="streets" driver="ogr" build_spatial_index="true">
             <url>../data/boston-scl-utm19n-meters.shp</url>
             <resample max_length="25"/>
@@ -95,8 +95,8 @@ to extruded buildings.
                 streets {
                     stroke:                       #ffff007f;
                     stroke-width:                 7.5m;
-                    altitude-clamping:            terrain-gpu;
-                    render-depth-offset-min-bias: 10;
+                    altitude-clamping:            terrain;
+                    render-depth-offset-min-bias: 3.6;
                 }
             </style>
         </styles>        
@@ -108,21 +108,23 @@ to extruded buildings.
             <url>../data/boston-parks.shp</url>
         </features>
         
-        <layout tile_size_factor="3.5">
-            <level max_range="3500"/>
+        <layout tile_size_factor="3">
+            <level max_range="2000"/>
         </layout>
         
         <instancing>true</instancing>
+		<cluster_culling>false</cluster_culling>
         
         <styles>
             <style type="text/css">
                 parks {
-                   model:                  "../data/tree.ive";
+                   model:                  "../data/loopix/tree4.osgb";
+				   model-scale:            0.15 + 0.1*Math.random();
                    model-placement:        random;
-                   model-density:          12000;
-                   model-scale:            1.0;
+                   model-density:          3000;
+				   model-heading:          Math.random() * 360.0;
                    altitude-clamping:      terrain;
-                   altitude-resolution:    0;
+				   render-min-alpha:       0.15;
                 }
             </style>
         </styles>        

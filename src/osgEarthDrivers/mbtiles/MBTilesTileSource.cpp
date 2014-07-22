@@ -34,13 +34,33 @@
 using namespace osgEarth;
 using namespace osgEarth::Drivers::MBTiles;
 
+//......................................................................
+
+namespace
+{
+    osgDB::ReaderWriter* getReaderWriter(const std::string& format)
+    {
+        osgDB::ReaderWriter* rw = 0L;
+
+        // Get a ReaderWriter for the tile format. Try both mime-type and extension.
+        rw = osgDB::Registry::instance()->getReaderWriterForMimeType( format );
+        if ( rw == 0L )
+        {
+            rw = osgDB::Registry::instance()->getReaderWriterForExtension( format ); 
+        }
+        return rw;
+    }
+}
+
+//......................................................................
 
 MBTilesTileSource::MBTilesTileSource(const TileSourceOptions& options) :
 TileSource( options ),
 _options  ( options ),      
 _database ( NULL ),
 _minLevel ( 0 ),
-_maxLevel ( 20 )
+_maxLevel ( 20 ),
+_forceRGB ( false )
 {
     //nop
 }
@@ -59,8 +79,19 @@ MBTilesTileSource::initialize(const osgDB::Options* dbOptions)
     {
         // For a NEW database, the profile MUST be set prior to initialization.
         if ( getProfile() == 0L )
-        {
             return Status::Error("Cannot create database; required Profile is missing");
+
+        // For a NEW database the format is required.
+        if ( _options.format().isSet() )
+        {
+            _tileFormat = _options.format().value();
+            _rw = getReaderWriter( _tileFormat );
+            if ( !_rw.valid() )
+                return Status::Error("No plugin to load format \"" + _tileFormat + "\"");
+        }
+        else
+        {
+            return Status::Error("Cannot create database; required format is missing");
         }
 
         OE_INFO << LC << "Database does not exist; attempting to create it." << std::endl;
@@ -76,20 +107,66 @@ MBTilesTileSource::initialize(const osgDB::Options* dbOptions)
     if ( rc != 0 )
     {                        
         return Status::Error( Stringify()
-            << "Cannot open database \"" << fullFilename << "\": " << sqlite3_errmsg(_database) );
+            << "Database \"" << fullFilename << "\": " << sqlite3_errmsg(_database) );
+    }
+    
+    // New database setup:
+    if ( isNewDatabase )
+    {
+        // create necessary db tables:
+        createTables();
+
+        // write profile to metadata:
+        std::string profileJSON = getProfile()->toProfileOptions().getConfig().toJSON(false);
+        putMetaData("profile", profileJSON);
+
+        // write format to metadata:
+        putMetaData("format", _tileFormat);
+
+        // compression?
+        if ( _options.compress().isSetTo(true) )
+        {
+            _compressor = osgDB::Registry::instance()->getObjectWrapperManager()->findCompressor("zlib");
+            if ( _compressor.valid() )
+            {
+                putMetaData("compression", "zlib");
+                OE_INFO << LC << "Data will be compressed (zlib)" << std::endl;
+            }
+        }
     }
 
-    std::string format;
-
-    // If the database pre-existed, read in the profile information from
-    // the metadata.
-    if ( !isNewDatabase )
+    // If the database pre-existed, read in the information from the metadata.
+    else // !isNewDatabase
     {
         std::string profileStr;
         getMetaData( "profile", profileStr );
 
-        // The data format (e.g., png, jpg, etc.)
-        getMetaData( "format", format );
+        // The data format (e.g., png, jpg, etc.). Any format passed in 
+        // in the options is superceded by the one in the database metadata.
+        std::string metaDataFormat;
+        getMetaData( "format", metaDataFormat );
+        if ( !metaDataFormat.empty() )
+            _tileFormat = metaDataFormat;
+
+        // By this point, we require a valid tile format.
+        if ( _tileFormat.empty() )
+            return Status::Error("Required format not in metadata, nor specified in the options.");
+
+        _rw = getReaderWriter( _tileFormat );
+        if ( !_rw.valid() )
+            return Status::Error("No plugin to load format \"" + _tileFormat + "\"");
+
+        // check for compression.
+        std::string compression;
+        getMetaData("compression", compression);
+        if ( !compression.empty() )
+        {
+            _compressor = osgDB::Registry::instance()->getObjectWrapperManager()->findCompressor(compression);
+            if ( !_compressor.valid() )
+                return Status::Error("Cannot find compressor \"" + compression + "\"");
+            else
+                OE_INFO << LC << "Data is compressed (" << compression << ")" << std::endl;
+        }
 
         // Check for bounds and populate DataExtents.
         std::string boundsStr;
@@ -132,8 +209,7 @@ MBTilesTileSource::initialize(const osgDB::Options* dbOptions)
 
                 if ( !profile )
                 {
-                    return Status::Error( Stringify()
-                        << "Cannot open database; profile unknown: " << profileStr );
+                    return Status::Error( Stringify() << "Profile not recognized: " << profileStr );
                 }
             }
             else
@@ -145,52 +221,24 @@ MBTilesTileSource::initialize(const osgDB::Options* dbOptions)
             setProfile( profile );     
             OE_INFO << LC << "Profile = " << profileStr << std::endl;
         }
+
+        if ( _options.computeLevels() == true )
+        {
+            computeLevels();
+        }
     }
 
-    // Determine the tile format and get a reader writer for it.        
-    if (_options.format().isSet())
-    {
-        //Get an explicitly defined format
-        _tileFormat = _options.format().value();
-    }
-    else if (!format.empty())
-    {
-        //Try to get it from the database metadata
-        _tileFormat = format;
-    }
-    else
-    {
-        // default to PNG. Might want to assess this later
-        _tileFormat = "png";
-    }
+    // do we require RGB? for jpeg?
+    _forceRGB =
+        osgEarth::endsWith(_tileFormat, "jpg", false) ||
+        osgEarth::endsWith(_tileFormat, "jpeg", false);
 
-    OE_INFO << LC << "Format = " << _tileFormat << std::endl;
-
-    //Get the ReaderWriter
-    _rw = osgDB::Registry::instance()->getReaderWriterForExtension( _tileFormat );                
-
-    // optionally compute existing levels:
-    if ( !isNewDatabase && _options.computeLevels()==true)
-    {
-        computeLevels();
-    }
-
-    _emptyImage = ImageUtils::createEmptyImage( 256, 256 );
-
-    // New database setup:
-    if ( isNewDatabase )
-    {
-        // create necessary db tables:
-        createTables();
-
-        // write profile to metadata:
-        std::string profileJSON = getProfile()->toProfileOptions().getConfig().toJSON(false);
-        putMetaData("profile", profileJSON);
-
-        // write format to metadata:
-        if ( !_tileFormat.empty() )
-            putMetaData("format", _tileFormat);
-    }
+    // make an empty image.
+    int size = 256;
+    _emptyImage = new osg::Image();
+    _emptyImage->allocateImage(size, size, 1, _forceRGB? GL_RGB : GL_RGBA, GL_UNSIGNED_BYTE);
+    unsigned char *data = _emptyImage->data(0,0);
+    memset(data, 0, (_forceRGB?3:4) * size * size);
 
     return STATUS_OK;
 }    
@@ -199,7 +247,7 @@ MBTilesTileSource::initialize(const osgDB::Options* dbOptions)
 CachePolicy
 MBTilesTileSource::getCachePolicyHint(const Profile* targetProfile) const
 {
-    if ( targetProfile->isHorizEquivalentTo(getProfile()) )
+    if ( !targetProfile || targetProfile->isHorizEquivalentTo(getProfile()) )
         return CachePolicy::NO_CACHE;
     else
         return CachePolicy::DEFAULT;
@@ -242,10 +290,10 @@ MBTilesTileSource::createImage(const TileKey&    key,
     }
 
     bool valid = true;        
+
     sqlite3_bind_int( select, 1, z );
     sqlite3_bind_int( select, 2, x );
     sqlite3_bind_int( select, 3, y );
-
 
     osg::Image* result = NULL;
     rc = sqlite3_step( select );
@@ -253,16 +301,36 @@ MBTilesTileSource::createImage(const TileKey&    key,
     {                     
         // the pointer returned from _blob gets freed internally by sqlite, supposedly
         const char* data = (const char*)sqlite3_column_blob( select, 0 );
-        int imageBufLen = sqlite3_column_bytes( select, 0 );
+        int dataLen = sqlite3_column_bytes( select, 0 );
 
-        // deserialize the image from the buffer:
-        std::string imageString( data, imageBufLen );
-        std::stringstream imageBufStream( imageString );
-        osgDB::ReaderWriter::ReadResult rr = _rw->readImage( imageBufStream );
-        if (rr.validImage())
+        std::string dataBuffer( data, dataLen );
+
+        // decompress if necessary:
+        if ( _compressor.valid() )
         {
-            result = rr.takeImage();                
-        }            
+            std::istringstream inputStream(dataBuffer);
+            std::string value;
+            if ( !_compressor->decompress(inputStream, value) )
+            {
+                OE_WARN << LC << "Decompression failed" << std::endl;
+                valid = false;
+            }
+            else
+            {
+                dataBuffer = value;
+            }
+        }
+
+        // decode the raw image data:
+        if ( valid )
+        {
+            std::istringstream inputStream(dataBuffer);
+            osgDB::ReaderWriter::ReadResult rr = _rw->readImage( inputStream );
+            if (rr.validImage())
+            {
+                result = rr.takeImage();                
+            }
+        }
     }
     else
     {
@@ -283,6 +351,39 @@ MBTilesTileSource::storeImage(const TileKey&    key,
         return false;
 
     Threading::ScopedMutexLock exclusiveLock(_mutex);
+
+    // encode the data stream:
+    std::stringstream buf;
+    osgDB::ReaderWriter::WriteResult wr;
+    if ( _forceRGB && ImageUtils::hasAlphaChannel(image) )
+    {
+        osg::ref_ptr<osg::Image> rgb = ImageUtils::convertToRGB8(image);
+        wr = _rw->writeImage(*(rgb.get()), buf);
+    }
+    else
+    {
+        wr = _rw->writeImage(*image, buf);
+    }
+
+    if ( wr.error() )
+    {
+        OE_WARN << LC << "Image encoding failed: " << wr.message() << std::endl;
+        return false;
+    }
+
+    std::string value = buf.str();
+    
+    // compress if necessary:
+    if ( _compressor.valid() )
+    {
+        std::ostringstream output;
+        if ( !_compressor->compress(output, value) )
+        {
+            OE_WARN << LC << "Compressor failed" << std::endl;
+            return false;
+        }
+        value = output.str();
+    }
 
     int z = key.getLOD();
     int x = key.getTileX();
@@ -308,10 +409,7 @@ MBTilesTileSource::storeImage(const TileKey&    key,
     sqlite3_bind_int( insert, 2, x );
     sqlite3_bind_int( insert, 3, y );
 
-    // encode and bind data:
-    std::stringstream buf;
-    osgDB::ReaderWriter::WriteResult wr = _rw->writeImage(*image, buf);
-    std::string value = buf.str();
+    // bind the data blob:
     sqlite3_bind_blob( insert, 4, value.c_str(), value.length(), SQLITE_STATIC );
 
     // run the sql.

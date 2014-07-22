@@ -217,7 +217,7 @@ MPGeometry::renderPrimitiveSets(osg::State& state,
             {
                 const Layer& layer = _layers[i];
 
-                if ( layer._imageLayer->getVisible() )
+                if ( layer._imageLayer->getVisible() && layer._imageLayer->getOpacity() > 0.0f )
                 {       
                     // activate the visible unit if necessary:
                     if ( activeImageUnit != _imageUnit )
@@ -330,19 +330,20 @@ MPGeometry::renderPrimitiveSets(osg::State& state,
     }
 }
 
+#if OSG_VERSION_GREATER_THAN(3,3,1)
+#    define COMPUTE_BOUND computeBoundingBox
+#else
+#    define COMPUTE_BOUND computeBound
+#endif
 
 osg::BoundingBox
-MPGeometry::computeBound() const
+MPGeometry:: COMPUTE_BOUND() const
 {
-    osg::BoundingBox bbox = osg::Geometry::computeBound();
+    osg::BoundingBox bbox = osg::Geometry:: COMPUTE_BOUND ();
     {
         // update the uniform.
         Threading::ScopedMutexLock exclusive(_frameSyncMutex);
-        osg::BoundingSphere bs(bbox);
-        osg::Vec4f tk;
-        _tileKeyValue.w() = bs.radius();
-        // debugging:
-        //const_cast<MPGeometry*>(this)->validate();
+        _tileKeyValue.w() = bbox.radius();
     }
     return bbox;
 }
@@ -451,10 +452,12 @@ MPGeometry::drawImplementation(osg::RenderInfo& renderInfo) const
     //    return;
     //}
 
-    // See if this is a depth-only camera. If so we can skip all the layers
+    // See if this is a pre-render depth-only camera. If so we can skip all the layers
     // and just render the primitive sets.
+    osg::Camera* camera = renderInfo.getCurrentCamera();
     bool renderColor =
-        (renderInfo.getCurrentCamera()->getClearMask() & GL_COLOR_BUFFER_BIT) != 0L;
+        (camera->getRenderOrder() != osg::Camera::PRE_RENDER) ||
+        ((camera->getClearMask() & GL_COLOR_BUFFER_BIT) != 0L);
 
     osg::State& state = *renderInfo.getState();
 

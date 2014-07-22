@@ -19,6 +19,8 @@
 #include <osgEarthUtil/LogarithmicDepthBuffer>
 #include <osgEarth/CullingUtils>
 #include <osgEarth/VirtualProgram>
+#include <osgEarth/Registry>
+#include <osgEarth/Capabilities>
 #include <osgUtil/CullVisitor>
 #include <osg/Uniform>
 #include <osg/buffered_value>
@@ -41,10 +43,25 @@ namespace
             if ( camera )
             {
                 // find (or create) a stateset
-                unsigned id = camera->getGraphicsContext()->getState()->getContextID();
-                osg::ref_ptr<osg::StateSet>& stateset = _stateSets[id];
-                if ( !stateset.valid() )
-                    stateset = new osg::StateSet();
+                osg::StateSet* stateset = 0L;
+                osg::ref_ptr<osg::StateSet> refStateSet;
+
+                osg::GraphicsContext* gc = camera->getGraphicsContext();
+                if ( gc )
+                {
+                    // faster method of re-using statesets when a GC is present
+                    unsigned id = gc->getState()->getContextID();
+                    refStateSet = _stateSets[id];
+                    if ( !refStateSet.valid() )
+                        refStateSet = new osg::StateSet();
+                    stateset = refStateSet.get();
+                }
+                else
+                {
+                    // no GC is present (e.g., RTT camera) so just make a fresh one
+                    refStateSet = new osg::StateSet();
+                    stateset = refStateSet.get();
+                }
 
                 // the uniform conveying the far clip plane:
                 osg::Uniform* u = stateset->getOrCreateUniform("oe_logdepth_farplane", osg::Uniform::FLOAT);
@@ -96,13 +113,21 @@ namespace
 
 LogarithmicDepthBuffer::LogarithmicDepthBuffer()
 {
-    _cullCallback = new LogDepthCullCallback();
+    _supported = Registry::capabilities().supportsGLSL();
+    if ( _supported )
+    {
+        _cullCallback = new LogDepthCullCallback();
+    }
+    else
+    {
+        OE_WARN << LC << "Not supported on this platform (no GLSL)" << std::endl;
+    }
 }
 
 void
 LogarithmicDepthBuffer::install(osg::Camera* camera)
 {
-    if ( camera )
+    if ( camera && _supported )
     {
         // install the shader component:
         osg::StateSet* stateset = camera->getOrCreateStateSet();
@@ -121,7 +146,7 @@ LogarithmicDepthBuffer::install(osg::Camera* camera)
 void
 LogarithmicDepthBuffer::uninstall(osg::Camera* camera)
 {
-    if ( camera )
+    if ( camera && _supported )
     {
         camera->removeCullCallback( _cullCallback.get() );
 

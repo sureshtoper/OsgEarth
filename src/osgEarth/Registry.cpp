@@ -21,11 +21,13 @@
 #include <osgEarth/Cube>
 #include <osgEarth/VirtualProgram>
 #include <osgEarth/ShaderFactory>
+#include <osgEarth/ShaderGenerator>
 #include <osgEarth/TaskService>
 #include <osgEarth/IOTypes>
 #include <osgEarth/ColorFilter>
 #include <osgEarth/StateSetCache>
 #include <osgEarth/HTTPClient>
+#include <osgEarth/StringUtils>
 #include <osgEarth/TerrainEngineNode>
 #include <osg/Notify>
 #include <osg/Version>
@@ -46,8 +48,6 @@ using namespace OpenThreads;
 
 #define LC "[Registry] "
 
-// from MimeTypes.cpp
-extern const char* builtinMimeTypeExtMappings[];
 
 Registry::Registry() :
 osg::Referenced     ( true ),
@@ -72,6 +72,9 @@ _cacheDriver        ( "filesystem" )
 
     // generates the basic shader code for the terrain engine and model layers.
     _shaderLib = new ShaderFactory();
+
+    // shader generator used internally by osgEarth. Can be replaced.
+    _shaderGen = new ShaderGenerator();
 
     // thread pool for general use
     _taskServiceManager = new TaskServiceManager();
@@ -173,6 +176,12 @@ _cacheDriver        ( "filesystem" )
 #ifdef WIN32
         _defaultFont = osgText::readFontFile("arial.ttf");
 #endif
+    }
+    if ( _defaultFont.valid() )
+    {
+        // mitigates mipmapping issues that cause rendering artifacts
+        // for some fonts/placement
+        _defaultFont->setGlyphImageMargin( 2 );
     }
 
     // register the system stock Units.
@@ -415,6 +424,19 @@ Registry::setShaderFactory( ShaderFactory* lib )
     if ( lib != 0L && lib != _shaderLib.get() )
         _shaderLib = lib;
 }
+
+ShaderGeneratorProxy
+Registry::getShaderGenerator() const
+{
+    return ShaderGeneratorProxy(_shaderGen.get());
+}
+
+void
+Registry::setShaderGenerator(ShaderGenerator* shaderGen)
+{
+    if ( shaderGen != 0L && shaderGen != _shaderGen.get() )
+        _shaderGen = shaderGen;
+}
         
 void
 Registry::setURIReadCallback( URIReadCallback* callback ) 
@@ -534,6 +556,38 @@ Registry::getActivities(std::set<std::string>& output)
 {
     Threading::ScopedMutexLock lock(_activityMutex);
     output = _activities;
+}
+
+std::string 
+Registry::getExtensionForMimeType(const std::string& mt)
+{            
+    std::string mt_lower = osgEarth::toLower(mt);
+
+    const osgDB::Registry::MimeTypeExtensionMap& exmap = osgDB::Registry::instance()->getMimeTypeExtensionMap();
+    for( osgDB::Registry::MimeTypeExtensionMap::const_iterator i = exmap.begin(); i != exmap.end(); ++i )
+    {
+        if ( i->first == mt_lower )
+        {
+            return i->first;
+        }
+    }
+    return std::string();
+}
+
+std::string 
+Registry::getMimeTypeForExtension(const std::string& ext)
+{            
+    std::string ext_lower = osgEarth::toLower(ext);
+
+    const osgDB::Registry::MimeTypeExtensionMap& exmap = osgDB::Registry::instance()->getMimeTypeExtensionMap();
+    for( osgDB::Registry::MimeTypeExtensionMap::const_iterator i = exmap.begin(); i != exmap.end(); ++i )
+    {
+        if ( i->second == ext_lower )
+        {
+            return i->first;
+        }
+    }
+    return std::string();
 }
 
 

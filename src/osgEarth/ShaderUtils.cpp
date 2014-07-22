@@ -17,9 +17,11 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include <osgEarth/ShaderUtils>
+#include <osgEarth/ShaderFactory>
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
 #include <osgEarth/CullingUtils>
+#include <osg/ComputeBoundsVisitor>
 #include <list>
 
 using namespace osgEarth;
@@ -718,6 +720,85 @@ ArrayUniform::detach()
             _stateSet = 0L;
 
             stateSet_safe.release(); // don't want to unref delete
+        }
+    }
+}
+
+//...................................................................
+
+RangeUniformCullCallback::RangeUniformCullCallback() :
+_dump( false )
+{
+    _uniform = osgEarth::Registry::instance()->shaderFactory()->createRangeUniform();
+
+    _stateSet = new osg::StateSet();
+    _stateSet->addUniform( _uniform.get() );
+}
+
+void
+RangeUniformCullCallback::operator()(osg::Node* node, osg::NodeVisitor* nv)
+{
+    osgUtil::CullVisitor* cv = Culling::asCullVisitor(nv);
+
+    const osg::BoundingSphere& bs = node->getBound();
+
+    float range = nv->getDistanceToViewPoint( bs.center(), true );
+
+    // range = distance from the viewpoint to the outside of the bounding sphere.
+    _uniform->set( range - bs.radius() );
+
+    if ( _dump )
+    {
+        OE_NOTICE
+            << "Range = " << range 
+            << ", center = " << bs.center().x() << "," << bs.center().y()
+            << ", radius = " << bs.radius() << std::endl;
+    }
+    
+    cv->pushStateSet( _stateSet.get() );
+    traverse(node, nv);
+    cv->popStateSet();
+}
+
+//------------------------------------------------------------------------
+
+namespace
+{
+    
+}
+
+void
+DiscardAlphaFragments::install(osg::StateSet* ss, float minAlpha) const
+{
+    if ( ss && minAlpha < 1.0f )
+    {
+        VirtualProgram* vp = VirtualProgram::getOrCreate(ss);
+        if ( vp )
+        {
+            std::string code = Stringify()
+                << "#version " GLSL_VERSION_STR "\n"
+                << "void oe_discardalpha_frag(inout vec4 color) { \n"
+                << "    if ( color.a < " << std::setprecision(1) << minAlpha << ") discard;\n"
+                << "} \n";
+
+            vp->setFunction(
+                "oe_discardalpha_frag",
+                code,
+                ShaderComp::LOCATION_FRAGMENT_COLORING,
+                0L, 2.0f);
+        }
+    }
+}
+ 
+void
+DiscardAlphaFragments::uninstall(osg::StateSet* ss) const
+{
+    if ( ss )
+    {
+        VirtualProgram* vp = VirtualProgram::get(ss);
+        if ( vp )
+        {
+            vp->removeShader("oe_discardalpha_frag");
         }
     }
 }

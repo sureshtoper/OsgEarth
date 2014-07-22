@@ -131,7 +131,7 @@ _fallbackData( fallbackData )
     osg::Texture::FilterMode minFilter = layer->getImageLayerOptions().minFilter().get();
     osg::Texture::FilterMode magFilter = layer->getImageLayerOptions().magFilter().get();
 
-    if (image->r() == 1)
+    if (image->r() <= 1)
     {
         _texture = new osg::Texture2D( image );
     }
@@ -143,6 +143,9 @@ _fallbackData( fallbackData )
         ImageUtils::flattenImage(image, images);
 
         osg::Texture2DArray* tex = new osg::Texture2DArray();
+        tex->setTextureDepth(images.size());
+        tex->setInternalFormat(images[0]->getInternalTextureFormat());
+        tex->setSourceFormat(images[0]->getPixelFormat());
         for (int i = 0; i < (int) images.size(); ++i)
             tex->setImage( i, images[i].get() );
 

@@ -186,6 +186,40 @@ namespace osgEarth
 
         void ensureCapacity( unsigned newSize );
     };
+
+
+    /**
+     * Cull callback that installs a range (distance to view point) uniform
+     * in the State based on the bounding center of the node being culled.
+     * The actual name of the range uniform can is returned by
+     * ShaderFactory::getRangeUniformName().
+     */
+    class OSGEARTH_EXPORT RangeUniformCullCallback : public osg::NodeCallback
+    {
+    public:
+        RangeUniformCullCallback();
+        void operator()(osg::Node*, osg::NodeVisitor* nv);
+
+        // testing
+        void setDump(bool v) { _dump = true; }
+
+    private:
+        osg::ref_ptr<osg::StateSet> _stateSet;
+        osg::ref_ptr<osg::Uniform>  _uniform;
+        bool                        _dump;
+    };
+
+
+    /**
+     * Shader that will discard fragments whose alpha component falls below
+     * the specified threshold.
+     */
+    class OSGEARTH_EXPORT DiscardAlphaFragments
+    {
+    public:
+        void install(osg::StateSet* ss, float minAlpha) const;
+        void uninstall(osg::StateSet* ss) const;
+    };
 }
 
 #endif // OSGEARTH_SHADER_UTILS_H

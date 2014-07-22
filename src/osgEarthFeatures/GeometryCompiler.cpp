@@ -26,6 +26,7 @@
 #include <osgEarthFeatures/SubstituteModelFilter>
 #include <osgEarthFeatures/TessellateOperator>
 #include <osgEarthFeatures/Session>
+#include <osgEarth/Utils>
 #include <osgEarth/AutoScale>
 #include <osgEarth/CullingUtils>
 #include <osgEarth/Registry>
@@ -65,7 +66,9 @@ namespace
             for( unsigned i=0; i<geode.getNumDrawables(); ++i )
             {
                 osg::Drawable* d = geode.getDrawable(i);
-                osg::BoundingBox bbox = d->getBound();
+
+                osg::BoundingBox bbox = Utils::getBoundingBox(d);
+
                 if ( bbox.zMin() > _low )
                     bbox.expandBy( osg::Vec3f(bbox.xMin(), bbox.yMin(), _low) );
                 if ( bbox.zMax() < _high )
@@ -507,9 +510,9 @@ GeometryCompiler::compile(FeatureList&          workingSet,
         if ( _options.shaderPolicy() == SHADERPOLICY_GENERATE )
         {
             // no ss cache because we will optimize later.
-            ShaderGenerator gen;
-            gen.setProgramName( "osgEarth.GeometryCompiler" );
-            gen.run( resultGroup.get() );
+            Registry::shaderGenerator().run( 
+                resultGroup.get(),
+                "osgEarth.GeomCompiler" );
         }
         else if ( _options.shaderPolicy() == SHADERPOLICY_DISABLE )
         {
@@ -532,7 +535,11 @@ GeometryCompiler::compile(FeatureList&          workingSet,
         sscache->optimize( resultGroup.get() );
     }
 
+    //test: dump the tile to disk
     //osgDB::writeNodeFile( *(resultGroup.get()), "out.osg" );
+
+    //test: shader LOD callback
+    //resultGroup->addCullCallback( new RangeUniformCullCallback() );
 
 #ifdef PROFILING
     osg::Timer_t p_end = osg::Timer::instance()->tick();
