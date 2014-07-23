@@ -73,16 +73,29 @@ struct Altitude
             if (osgDB::getFileExtension(filename) == "gr1")
             {
                 ColorRampOptions colorOpts;
-                colorOpts.ramp() = "../data/colorramps/temperature_c.clr";
+                std::string ramp = "../data/colorramps/temperature_c.clr";
+                if (osgEarth::endsWith(directory, "Wind"))
+                {
+                    ramp = "../data/colorramps/wind.clr";
+                }
+                else if (osgEarth::endsWith(directory, "CloudCover"))
+                {
+                    ramp = "../data/colorramps/clouds.clr";
+                }                                
+
+                colorOpts.ramp() = ramp;
 
                 GDALOptions gdalOpt;
-                gdalOpt.url() = filename;
+                gdalOpt.url() = filename;                
 
 
                 ElevationLayerOptions elevationOpt("", gdalOpt);
-                colorOpts.elevationLayer() = elevationOpt;
+                colorOpts.elevationLayer() = elevationOpt;                
 
-                layers.push_back( new ImageLayer(colorOpts) );                
+                ImageLayerOptions imageOpt("", colorOpts);
+                imageOpt.cachePolicy() = CachePolicy::NO_CACHE;
+
+                layers.push_back( new ImageLayer(imageOpt) );                
             }
         }
 
