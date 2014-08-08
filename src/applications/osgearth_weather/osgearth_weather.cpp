@@ -95,7 +95,9 @@ struct Altitude
                 ImageLayerOptions imageOpt("", colorOpts);
                 imageOpt.cachePolicy() = CachePolicy::NO_CACHE;
 
-                layers.push_back( new ImageLayer(imageOpt) );                
+                ImageLayer* layer = new ImageLayer(imageOpt); 
+                layer->setOpacity(0.75);
+                layers.push_back( layer );                
             }
         }
 
