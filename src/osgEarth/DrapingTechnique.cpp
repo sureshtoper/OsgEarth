@@ -46,6 +46,13 @@ namespace
 
 namespace
 {
+    bool sortByYX(const osg::Vec3d& a, const osg::Vec3d& b) {
+        if ( osg::equivalent(a.y(), b.y(), 0.0001) )
+            return a.x() < b.x();
+        else
+            return a.y() < b.y();
+    }
+
     struct Line2d
     {
         bool intersectRaysXY(
@@ -125,91 +132,94 @@ namespace
             if ( eyeClip.y() >= -1.0 && eyeClip.y() <= 1.0 )
                 return;
 
-            // sanity check. 6 faces requires since we need near and far
-            if ( params._visibleFrustumPH._faces.size() < 6 )
-                return;
-
-            // discover the max near-plane width.
+            // find the near and far plane widths.
             double halfWidthNear = 0.0;
-            osgShadow::ConvexPolyhedron::Faces::iterator f = params._visibleFrustumPH._faces.begin();
-            f++; f++; f++; f++; // the near plane Face
-            // f->vertices.size() should always be 4, I would think.. but it's not..
-            for(unsigned i=0; i<f->vertices.size(); ++i)
-            {
-                osg::Vec3d p = f->vertices[i] * rttMVP;
-                if ( fabs(p.x()) > halfWidthNear )
-                    halfWidthNear = fabs(p.x());
-            }
+            double halfWidthFar  = 0.0;
 
-            double aspectRatio  = DBL_MAX;
-            double farNearRatio = DBL_MAX;
-            double halfWidthFar = DBL_MAX;
+            // frustum points:
+            std::vector<osg::Vec3d> points;
+            params._visibleFrustumPH.getPoints(points);
+            
+            // transform to view:
+            for(unsigned i=0; i<points.size(); ++i)
+                points[i] = points[i] * rttMVP;
 
-            // Next, find the point in the camera frustum that forms the largest angle
-            // with the center line (line of sight). This is simply the minimum dot
-            // product of LOS vector and the vector from (0,-1,0) to the point.
-            osg::Vec3d look(0,1,0);
-            double     min_dp   = 1.0;
-            osg::Vec3d rightmost_p;
-            f++; // the Far plane face
-            for(unsigned i=0; i<f->vertices.size(); ++i)
+            // sort by Y (distance from camera, in this case)
+            std::sort(points.begin(), points.end(), sortByYX);
+            
+            std::vector<osg::Vec3d> p;
+            for(unsigned i=0; i<points.size(); ++i)
             {
-                osg::Vec3d p = f->vertices[i] * rttMVP;
-                // only check points on the right (since it's symmetrical)
-                if ( p.x() > 0 ) 
+                if ( points[i].x() > 0 && (p.empty() || !osg::equivalent(points[i].y(), p[p.size()-1].y(), 0.01)) )
                 {
-                    osg::Vec3d pv(p.x(), p.y()+1.0, 0); pv.normalize();
-                    double dp = look * pv;
-                    if ( dp < min_dp )
-                    {
-                        min_dp = dp;
-                        rightmost_p = p;
-                    }
+                    p.push_back(points[i]);
                 }
             }
 
-            // Now calculate the far extent. This is an iterative process;
-            // If either the aspectRatio or far/near-ratio limits are exceeded
-            // by the value we calculate, reset the near width to accomodate
-            // and try again. Worst case this should be no more than 3 iterations.
-            double minHalfWidthNear = halfWidthNear;
-
-            Line2d farLine( osg::Vec3d(-1,1,0), osg::Vec3d(1,1,0) );
-
-            int iterations = 0;
-            while(
-                (aspectRatio > maxApsectRatio || farNearRatio > maxFarNearRatio) &&
-                (halfWidthFar > halfWidthNear) &&
-                (iterations++ < 10) )
+            if ( p.size() == 0 )
             {
-                // make sure all the far-clip verts are inside our polygon.
-                // stretch out the far line to accomodate them.
-                osg::Vec3d NR( halfWidthNear, -1, 0);
-
-                osg::Vec3d i;
-                Line2d( NR, rightmost_p ).intersect( farLine, i );
-                halfWidthFar = i.x();
-
-                aspectRatio  = (halfWidthFar-halfWidthNear)/2.0;
-                if ( aspectRatio > maxApsectRatio )
-                {
-                    halfWidthNear = halfWidthFar - 2.0*maxApsectRatio;
-                }
-
-                farNearRatio = halfWidthFar/halfWidthNear;
-                if ( farNearRatio > maxFarNearRatio )
-                {
-                    halfWidthNear = halfWidthFar / maxFarNearRatio;
-                    //break;
-                }
-
-                halfWidthNear = std::max(halfWidthNear, minHalfWidthNear);
-            }
-
-            // if the far plane is narrower than the near plane, bail out and 
-            // fall back on a simple rectangular clip camera.
-            if ( halfWidthFar <= halfWidthNear )
+                std::cout << "WTF\n";
                 return;
+            }
+
+            osg::Vec3d NR = p[0];
+            halfWidthNear = NR.x();
+            osg::Vec2d NR2(halfWidthNear, NR.y());
+            
+            unsigned n = p.size();
+            double minDot = 1.0;
+            unsigned halfWidthIndex = n-1;
+            
+            for(unsigned i=1; i<n; ++i)
+            {
+                osg::Vec2d v = osg::Vec2d(p[i].x(), p[i].y()) - NR2;
+                v.normalize();
+
+                double dot = osg::Vec2d(0,1) * v;
+
+                if (dot < minDot)
+                {
+                    minDot = dot;
+                    halfWidthIndex = i;
+                }
+            }
+
+            // bail out if the deviation is too low since we don't need warping.
+            if (minDot < 0.80)
+            {
+                //std::cout<<"BAIL: DEV=" << minDot << std::endl;
+                return;
+            }
+            
+            // construct a far plane:
+            osg::Vec3d ftemp(p[n-1]); ftemp.x() += 1.0;
+            Line2d farLine( p[n-1], ftemp);
+
+            osg::Vec3d i;
+            Line2d( NR, p[halfWidthIndex] ).intersect( farLine, i );
+            halfWidthFar = i.x();
+
+            // clamp the ratio to avoid anomalies.
+            while(halfWidthFar/halfWidthNear > maxFarNearRatio)
+            {
+                halfWidthNear *= 2.0;
+                osg::Vec3d i;
+                Line2d( NR, p[halfWidthIndex] ).intersect( farLine, i );
+                if (i.x() <= halfWidthNear)
+                    break;
+                halfWidthFar = i.x();
+            }
+
+#if 0
+            // print points:
+            for(unsigned i=0; i<n; ++i)
+                std::cout << 
+                    "("<<p[i].x()<<","<<p[i].y() << ") ";
+
+            std::cout << "N=" << halfWidthNear << ", F=" << halfWidthFar << ", R=" << halfWidthFar/halfWidthNear
+                << ", DEV=" << minDot;
+            std::cout << "\n";     
+#endif
 
             //OE_NOTICE  << "\n"
             //    << "HN = " << halfWidthNear << "\n"
@@ -295,7 +305,7 @@ _textureSize     ( 1024 ),
 _mipmapping      ( false ),
 _rttBlending     ( true ),
 _attachStencil   ( false ),
-_maxFarNearRatio ( 5.0 )
+_maxFarNearRatio ( 40.0 )
 {
     _supported = Registry::capabilities().supportsGLSL();
 

@@ -23,12 +23,14 @@
 #include <osgEarth/Registry>
 #include <osgEarth/Capabilities>
 #include <osgEarth/CullingUtils>
+#include <osgEarth/DPLineSegmentIntersector>
 
 #include <osg/AutoTransform>
 #include <osg/ComputeBoundsVisitor>
 #include <osg/ShapeDrawable>
+#include <osg/Plane>
 #include <osgShadow/ConvexPolyhedron>
-#include <osgUtil/LineSegmentIntersector>
+#include <osgUtil/PlaneIntersector>
 
 #include <iomanip>
 #include <stack>
@@ -473,6 +475,38 @@ OverlayDecorator::cullTerrainAndCalculateRTTParams(osgUtil::CullVisitor* cv,
     mvMatrix.getLookAt( camEye, camTo, camUp, 1.0); //eyeLen);
     osg::Vec3 camLook = camTo-camEye;
     camLook.normalize();
+    
+    // For now: our RTT camera z range will be based on this equation:
+    osg::Matrix rttViewMatrix, rttProjMatrix;
+
+    double zspan = std::max(50000.0, hasl+25000.0);
+    osg::Vec3d up = camLook;
+
+    // deviation (abs dot product) b/w look vector and rtt vector:
+    double rttLookDeviation = 0.0;
+
+    if ( _isGeocentric )
+    {
+        osg::Vec3d rttEye = eye+worldUp*zspan;
+        //establish a valid up vector
+        osg::Vec3d rttLook = -rttEye;
+        rttLook.normalize();
+        rttLookDeviation = fabs(rttLook * camLook);
+        if ( rttLookDeviation > 0.9999 )
+            up.set( camUp );
+
+        // do NOT look at (0,0,0); must look down the ellipsoid up vector.
+        rttViewMatrix.makeLookAt( rttEye, rttEye-worldUp*zspan, up );
+    }
+    else
+    {
+        osg::Vec3d rttLook(0, 0, -1);
+        rttLookDeviation = fabs(rttLook * camLook);
+        if ( rttLookDeviation > 0.9999 )
+            up.set( camUp );
+
+        rttViewMatrix.makeLookAt( camEye + worldUp*zspan, camEye - worldUp*zspan, up );
+    }
 
     // Save and reset the current near/far planes before traversing the subgraph.
     // We do this because we want a projection matrix that includes ONLY the clip
@@ -499,26 +533,82 @@ OverlayDecorator::cullTerrainAndCalculateRTTParams(osgUtil::CullVisitor* cv,
     double zFar  = cv->getCalculatedFarPlane();
     cv->clampProjectionMatrix( projMatrix, zNear, zFar );
 
-    OE_TEST << LC << "Subgraph clamp: zNear = " << zNear << ", zFar = " << zFar << std::endl;
+    //OE_TEST << LC << "Subgraph clamp: zNear = " << zNear << ", zFar = " << zFar << std::endl;
 
     // restore the clip planes in the cull visitor, now that we have our subgraph
     // projection matrix.
     cv->setCalculatedNearPlane( osg::minimum(zSavedNear, zNear) );
     cv->setCalculatedFarPlane( osg::maximum(zSavedFar, zFar) );
 
-    // clamp the far plane (for RTT purposes) to the horizon distance.
-    double maxFar = std::min( horizonDistance, _maxHorizonDistance );
-    cv->clampProjectionMatrix( projMatrix, zNear, maxFar );
 
-    // prepare to calculate the ideal far plane for RTT extent resolution.
+    // Next we will constrain the NEAR and FAR planes of the projection matrix.
     osg::Matrixd MVP = *cv->getModelViewMatrix() * projMatrix;
     osg::Matrixd inverseMVP;
     inverseMVP.invert(MVP);
 
-    double maxDist2 = 0.0;
+    // Intersect the bottom of the view frustum with the terrain to find an 
+    // "optimal" near plane.
+    double minNear = zNear;
 
-    // constrain the far plane.
+    if (rttLookDeviation < 0.9)
+    {
+        osg::Plane bottomPlane(
+            osg::Vec3d(-1,-1,-1) * inverseMVP,
+            osg::Vec3d(+1,-1,-1) * inverseMVP,
+            osg::Vec3d(+1,-1,+1) * inverseMVP);
+
+        osg::Polytope b;
+        b.setToUnitFrustum(false, true);
+        b.transform(inverseMVP);
+
+        osgUtil::PlaneIntersector* pi = new osgUtil::PlaneIntersector(
+            bottomPlane, b);   
+
+        osg::Matrix MV = *cv->getModelViewMatrix();
+        osg::Matrix inverseMV;
+        inverseMV.invert(MV);
+
+        osgUtil::IntersectionVisitor iv( pi );
+        this->accept( iv );
+        double minDist2 = DBL_MAX;
+        double minDist = DBL_MAX;
+        int count = 0;
+        if ( pi->containsIntersections() )
+        {
+            for(unsigned q=0; q<pi->getIntersections().size(); ++q)
+            {
+                osgUtil::PlaneIntersector::Intersection& i = pi->getIntersections()[q];
+                for(unsigned j=0; j<i.polyline.size(); ++j)
+                {
+                    ++count;
+                    osg::Vec3d pw = i.polyline[j] * (*i.matrix);
+                    osg::Vec3d pv = pw * MV;
+
+                    if ( pv.z() < 0 )
+                    {
+                        double dist = -pv.z();
+                        if ( dist < minDist )
+                            minDist = dist;
+                    }
+                }
+            }
+            if ( minDist > zNear && minDist < DBL_MAX )
+                minNear = minDist;
+
+            //if ( minNear > zNear )
+            //    std::cout << "near: went from " << zNear << " to " << minNear
+            //    << " (" << count << " points)" << std::endl;
+        }
+    }
+
+    // Now constrain the far plane:
+
+    // first, constrain it to the horizon distance:
+    double maxFar = std::min( horizonDistance, _maxHorizonDistance );
+
+    //TODO: is this worth it?
     // intersect the top corners of the projection volume since those are the farthest.
+    double maxDist2 = 0.0;
     if ( _isGeocentric )
     {
         intersectClipRayWithSphere( -1.0, 1.0, inverseMVP, R, maxDist2 );
@@ -539,49 +629,17 @@ OverlayDecorator::cullTerrainAndCalculateRTTParams(osgUtil::CullVisitor* cv,
         maxFar = std::min( zNear+sqrt(maxDist2), maxFar );
     }
 
-    // reset the projection matrix if we changed the far:
-    if ( maxFar != zFar )
+    // Reset the projection matrix if we changed near or far, and 
+    // recalculate the matrices.
+    if ( maxFar != zFar || minNear != zNear )
     {
-        setFar( projMatrix, maxFar );
+        cv->clampProjectionMatrix(projMatrix, minNear, maxFar);
         MVP = *cv->getModelViewMatrix() * projMatrix;
         inverseMVP.invert(MVP);
     }
 
     // calculate the new RTT matrices. All techniques will share the 
-    // same set. We could probably put these in the "shared" category
-    // and use pointers..todo.
-    osg::Matrix rttViewMatrix, rttProjMatrix;
-
-    // for a camera that cares about geometry (like the draping technique) it's important
-    // to include the geometry in the ortho-camera's Z range. But for a camera that just
-    // cares about the terrain depth (like the clamping technique) we want to constrain 
-    // the Ortho Z as mush as possible in order to maintain depth precision. Perhaps
-    // later we can split this out and have each technique calculation its own View and
-    // Proj matrix.
-
-    // For now: our RTT camera z range will be based on this equation:
-    double zspan = std::max(50000.0, hasl+25000.0);
-    osg::Vec3d up = camLook;
-    if ( _isGeocentric )
-    {
-        osg::Vec3d rttEye = eye+worldUp*zspan;
-        //establish a valid up vector
-        osg::Vec3d rttLook = -rttEye;
-        rttLook.normalize();
-        if ( fabs(rttLook * camLook) > 0.9999 )
-            up.set( camUp );
-
-        // do NOT look at (0,0,0); must look down the ellipsoid up vector.
-        rttViewMatrix.makeLookAt( rttEye, rttEye-worldUp*zspan, up );
-    }
-    else
-    {
-        osg::Vec3d rttLook(0, 0, -1);
-        if ( fabs(rttLook * camLook) > 0.9999 )
-            up.set( camUp );
-
-        rttViewMatrix.makeLookAt( camEye + worldUp*zspan, camEye - worldUp*zspan, up );
-    }
+    // same set.
 
     // Build a polyhedron for the new frustum so we can slice it.
     // TODO: do we really even need to slice it anymore? consider
@@ -612,6 +670,8 @@ OverlayDecorator::cullTerrainAndCalculateRTTParams(osgUtil::CullVisitor* cv,
 #else
         const osg::BoundingSphere& visibleOverlayBS = params._group->getBound();
 #endif
+
+#if 0 //GW: testing
         if ( visibleOverlayBS.valid() )
         {
             // form an axis-aligned polytope around the bounding sphere of the
@@ -642,6 +702,7 @@ OverlayDecorator::cullTerrainAndCalculateRTTParams(osgUtil::CullVisitor* cv,
 
             visiblePH.cut( visibleOverlayPT );
         }
+#endif
 
         // for dumping, we want the previous fram's projection matrix
         // becasue the technique itself may have modified it.
@@ -682,6 +743,7 @@ OverlayDecorator::cullTerrainAndCalculateRTTParams(osgUtil::CullVisitor* cv,
             rttProjMatrix.makeOrtho(xmin, xmax, ymin, ymax, 0.0, dist+zspan);
 #endif
 
+#if 0
             // Clamp the view frustum's N/F to the visible geometry. This clamped
             // frustum is the one we'll send to the technique.
             double visNear, visFar;
@@ -694,12 +756,13 @@ OverlayDecorator::cullTerrainAndCalculateRTTParams(osgUtil::CullVisitor* cv,
             osgShadow::ConvexPolyhedron clampedFrustumPH;
             clampedFrustumPH.setToUnitFrustum(true, true);
             clampedFrustumPH.transform( inverseClampedMVP, clampedMVP );
+#endif
 
             // assign the matrices to the technique.
             params._rttViewMatrix.set( rttViewMatrix );
             params._rttProjMatrix.set( rttProjMatrix );
             params._eyeWorld = eye;
-            params._visibleFrustumPH = clampedFrustumPH; //frustumPH;
+            params._visibleFrustumPH = frustumPH; //clampedFrustumPH; //frustumPH;
         }
 
         // service a "dump" of the polyhedrons for dubugging purposes
