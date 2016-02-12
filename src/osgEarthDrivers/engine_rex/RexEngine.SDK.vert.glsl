@@ -1,4 +1,11 @@
 #version 330
+
+#define USE_BINDLESS 1
+#if USE_BINDLESS
+#extension GL_ARB_bindless_texture : require
+#define TEXTURE_LAYOUT layout(bindless_sampler)
+#endif
+
 #pragma vp_name Rex Terrain SDK
 
 /**
@@ -7,11 +14,11 @@
  */
 
 // uniforms from terrain engine
-uniform sampler2D oe_tile_elevationTex;
+TEXTURE_LAYOUT uniform sampler2D oe_tile_elevationTex;
 uniform mat4 oe_tile_elevationTexMatrix;
 uniform vec2 oe_tile_elevTexelCoeff;
 
-uniform sampler2D oe_tile_normalTex;
+TEXTURE_LAYOUT uniform sampler2D oe_tile_normalTex;
 uniform mat4 oe_tile_normalTexMatrix;
 
 uniform vec4 oe_tile_key;

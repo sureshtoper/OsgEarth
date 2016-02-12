@@ -22,6 +22,7 @@
 #include "Common"
 #include <osg/Texture2D>
 #include <osgEarth/ImageLayer>
+#include <osgEarth/TerrainTileModelFactory>
 
 using namespace osgEarth;
 
@@ -48,16 +49,16 @@ namespace osgEarth { namespace Drivers { namespace RexTerrainEngine
                 _order = rhs._order;
                 _texture = rhs._texture.get();
                 _textureMatrix = rhs._textureMatrix;
-                _ownsTexture = false; //rhs._ownsTexture;
+                _ownsTexture = false;
                 _parentTexture = rhs._parentTexture.get();
                 _parentTextureMatrix = rhs._parentTextureMatrix;
             }
 
-            osg::ref_ptr<const ImageLayer> _layer;          // source image layer
-            int                            _order;          // rendering order
-            osg::ref_ptr<osg::Texture>     _texture;        // texture object
-            osg::Matrixf                   _textureMatrix;  // scale bias matrix for inherited textures.
-            bool                           _ownsTexture;    // whether this key/pass owns this texture.
+            osg::ref_ptr<const ImageLayer> _layer;             // source image layer
+            int                            _order;             // rendering order
+            osg::ref_ptr<osg::Texture>     _texture;           // texture object
+            osg::Matrixf                   _textureMatrix;     // scale bias matrix for inherited textures.
+            bool                           _ownsTexture;       // whether this key/pass owns this texture.
 
             osg::ref_ptr<osg::Texture>     _parentTexture;
             osg::Matrixf                   _parentTextureMatrix;

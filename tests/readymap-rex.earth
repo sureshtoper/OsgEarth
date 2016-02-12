@@ -12,7 +12,9 @@
                  morph_imagery         = "true"
                  high_resolution_first = "true"
                  skirt_ratio           = "0.0"
-                 normal_maps           = "true">
+                 normal_maps           = "true"
+                 expiration_range      = "250000"
+                 expiration_threshold  = "0">
         </terrain>
     </options>
     

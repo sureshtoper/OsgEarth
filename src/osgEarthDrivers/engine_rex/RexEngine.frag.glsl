@@ -1,5 +1,11 @@
 #version 330
 
+#define USE_BINDLESS 1
+#if USE_BINDLESS
+#extension GL_ARB_bindless_texture : require
+#define TEXTURE_LAYOUT layout(bindless_sampler)
+#endif
+
 #pragma vp_name       REX Engine - Fragment
 #pragma vp_entryPoint oe_rexEngine_frag
 #pragma vp_location   fragment_coloring
@@ -7,14 +13,15 @@
 #pragma vp_define     OE_REX_GL_BLENDING
 #pragma vp_define     OE_REX_MORPH_IMAGERY
 
+TEXTURE_LAYOUT uniform sampler2D oe_layer_tex;
+
 uniform bool      oe_isPickCamera;
-uniform sampler2D oe_layer_tex;
 uniform int       oe_layer_uid;
 uniform int       oe_layer_order;
 uniform float     oe_layer_opacity;
 
 #ifdef OE_REX_MORPH_IMAGERY
-uniform sampler2D oe_layer_texParent;
+TEXTURE_LAYOUT uniform sampler2D oe_layer_texParent;
 uniform float oe_layer_texParentExists;
 in vec4 oe_layer_texcParent;
 in float oe_rex_morphFactor;

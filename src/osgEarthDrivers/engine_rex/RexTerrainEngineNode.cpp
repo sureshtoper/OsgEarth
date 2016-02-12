@@ -259,10 +259,7 @@ RexTerrainEngineNode::postInitialize( const Map* map, const TerrainOptions& opti
     }
 
     // A shared geometry pool.
-    if ( ::getenv("OSGEARTH_REX_NO_POOL") == 0L )
-    {
-        _geometryPool = new GeometryPool( _terrainOptions );
-    }
+    _geometryPool = new GeometryPool( _terrainOptions );
 
     // Make a tile loader
     PagerLoader* loader = new PagerLoader( this );

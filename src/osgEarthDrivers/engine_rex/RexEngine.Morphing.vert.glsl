@@ -14,8 +14,6 @@ vec4 oe_layer_tilec;
 
 out float oe_rex_morphFactor;
 
-uniform sampler2D oe_tile_elevationTex;
-uniform mat4      oe_tile_elevationTexMatrix;
 uniform vec2	  oe_tile_morph;
 uniform float     oe_tile_size;
 uniform vec4	  oe_tile_key;

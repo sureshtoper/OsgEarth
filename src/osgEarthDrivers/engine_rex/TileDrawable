@@ -50,6 +50,8 @@ namespace osgEarth { namespace Drivers { namespace RexTerrainEngine
         unsigned _texMatrixUniformNameID;
         unsigned _texMatrixParentUniformNameID;
         unsigned _texParentExistsUniformNameID;
+        unsigned _texUniformNameID;
+        unsigned _texParentUniformNameID;
 
         // Data stored for each graphics context:
         struct PerContextData {
@@ -59,9 +61,9 @@ namespace osgEarth { namespace Drivers { namespace RexTerrainEngine
         };
         mutable osg::buffered_object<PerContextData> _pcd;
 
-        mutable osg::Vec4f _tileMorphCValue;
-        mutable osg::Vec4f _tileGridDimsValue;
-        mutable osg::Vec4f _tileExtentsValue;
+        //mutable osg::Vec4f _tileMorphCValue;
+        //mutable osg::Vec4f _tileGridDimsValue;
+        //mutable osg::Vec4f _tileExtentsValue;
         RenderBindings _bindings;
 
         bool _supportsGLSL;
@@ -74,7 +76,7 @@ namespace osgEarth { namespace Drivers { namespace RexTerrainEngine
 
         bool _drawPatch;
 
-        osg::ref_ptr<MPTexture> _mptex;
+        mutable osg::ref_ptr<MPTexture> _mptex;
 
         int _textureImageUnit;
         int _textureParentImageUnit;

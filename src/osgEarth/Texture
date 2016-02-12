@@ -1,0 +1,83 @@
+/* -*-c++-*- */
+/* osgEarth - Dynamic map generation toolkit for OpenSceneGraph
+ * Copyright 2008-2014 Pelican Mapping
+ * http://osgearth.org
+ *
+ * osgEarth is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ */
+
+#ifndef OSGEARTH_TEXTURE_H
+#define OSGEARTH_TEXTURE_H 1
+
+#include <osgEarth/Common>
+#include <osgEarth/ThreadingUtils>
+#include <osg/Texture2D>
+
+namespace osgEarth
+{
+    typedef uint64_t GLuint64EXT;
+
+    class BindlessTexture
+    {
+    public:
+        void setBindless(bool value) { _bindless = value; }
+        bool isBindless() const { return _bindless; }
+
+        void bindTextureImageUnitToUniformID(unsigned unit, GLint uniformID) {
+            _uniformIDs[unit] = uniformID;
+        }
+
+    public:
+        static void initGL();
+
+        // GL extensions for bindless textures
+        static GLuint64EXT (GL_APIENTRY* glGetTextureHandle)(GLint texture);
+        static void        (GL_APIENTRY* glMakeTextureHandleResident)(GLuint64EXT handle);
+        static void        (GL_APIENTRY* glMakeTextureHandleNonResident)(GLuint64EXT handle);
+        static void        (GL_APIENTRY* glUniformHandleui64)(GLint location, GLuint64EXT handle);
+        static OpenThreads::Mutex _glFuncMutex;
+
+    protected:
+        BindlessTexture();
+        BindlessTexture(const BindlessTexture& rhs, const osg::CopyOp& copy);
+
+        bool _bindless;
+        mutable osg::buffered_object<GLuint64EXT> _handle;
+
+        // array index = texture image unit.
+        GLint _uniformIDs[64];
+    };
+
+
+    class OSGEARTH_EXPORT Texture2DEXT : public osg::Texture2D, public BindlessTexture
+    {
+    public:
+        Texture2DEXT();
+        Texture2DEXT(osg::Image* image);
+        Texture2DEXT(const Texture2DEXT& rhs, const osg::CopyOp& copy =osg::CopyOp::SHALLOW_COPY);
+
+        META_StateAttribute(osgEarth, Texture2DEXT, TEXTURE);
+
+    public: // Texture override
+
+        virtual void apply(osg::State& state) const;
+
+        virtual void releaseGLObjects(osg::State* state) const;
+
+        virtual void resizeGLObjectBuffers(unsigned maxSize);
+    };
+
+} // namespace
+
+#endif // OSGEARTH_TEXTURE_H

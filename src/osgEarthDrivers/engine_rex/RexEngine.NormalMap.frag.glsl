@@ -1,5 +1,11 @@
 #version 330 compatibility
 
+#define USE_BINDLESS 1
+#if USE_BINDLESS
+#extension GL_ARB_bindless_texture : require
+#define TEXTURE_LAYOUT layout(bindless_sampler)
+#endif
+
 #pragma vp_entryPoint oe_normalMapFragment
 #pragma vp_location   fragment_coloring
 #pragma vp_order      0.2
@@ -7,7 +13,7 @@
 // import terrain SDK
 vec4 oe_terrain_getNormalAndCurvature(in vec2);
 
-uniform sampler2D oe_tile_normalTex;
+TEXTURE_LAYOUT uniform sampler2D oe_tile_normalTex;
 
 in vec3 vp_Normal;
 in vec3 oe_UpVectorView;

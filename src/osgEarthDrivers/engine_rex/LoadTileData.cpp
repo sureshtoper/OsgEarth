@@ -21,6 +21,7 @@
 #include <osgEarth/TerrainEngineNode>
 #include <osgEarth/Terrain>
 #include <osgEarth/Registry>
+#include <osgEarth/Texture>
 #include <osg/NodeVisitor>
 
 using namespace osgEarth::Drivers::RexTerrainEngine;
@@ -76,6 +77,24 @@ namespace
     {
         const optional<bool>& unRefPolicy = Registry::instance()->unRefImageDataAfterApply();
         tex->setUnRefImageDataAfterApply( unRefPolicy.get() );
+    }
+
+    void setupTexture(osg::Texture* tex, const SamplerBinding* binding)
+    {
+        if ( binding )
+        {
+            BindlessTexture* btex = dynamic_cast<BindlessTexture*>(tex);
+            if ( btex )
+            {
+                btex->setBindless( true );
+
+                btex->bindTextureImageUnitToUniformID(
+                    binding->unit(),
+                    osg::Uniform::getNameID(binding->samplerName()) );
+
+                //OE_WARN << "Bound 0 to " << binding->samplerName() << " with ID " << osg::Uniform::getNameID(binding->samplerName()) << "\n";
+            }
+        }
     }
 }
 
@@ -134,6 +153,9 @@ LoadTileData::invoke()
                         {
                             applyDefaultUnRefPolicy( layerModel->getTexture() );
                             mptex->setLayer( layerModel->getImageLayer(), layerModel->getTexture(), layerModel->getOrder() );
+
+                            setupTexture( layerModel->getTexture(), colorBinding );
+                            setupTexture( layerModel->getTexture(), SamplerBinding::findUsage(bindings, SamplerBinding::COLOR_PARENT) );
                         }
                     }
 
@@ -158,11 +180,15 @@ LoadTileData::invoke()
                         binding->unit(),
                         _model->elevationModel()->getTexture() );
 
+                    // Elevation isn't working as bindless for some reason!
+                    // TODO
+                    //setupTexture( _model->elevationModel()->getTexture(), binding );
+
                     stateSet->removeUniform(binding->matrixName());
 
                     stateSet->addUniform( _context->getOrCreateMatrixUniform(
                         binding->matrixName(),
-                        osg::Matrixf::identity() ) );    
+                        osg::Matrixf::identity() ) );
                 }
             }
             
@@ -178,6 +204,8 @@ LoadTileData::invoke()
                     stateSet->setTextureAttribute(
                         binding->unit(),
                         _model->normalModel()->getTexture() );
+
+                    setupTexture( _model->normalModel()->getTexture(), binding );
 
                     stateSet->removeUniform(binding->matrixName());
 
@@ -204,6 +232,8 @@ LoadTileData::invoke()
                         stateSet->setTextureAttribute(
                             binding->unit(),
                             layerModel->getTexture() );
+
+                        setupTexture( layerModel->getTexture(), binding );
 
                         stateSet->removeUniform(binding->matrixName());
 

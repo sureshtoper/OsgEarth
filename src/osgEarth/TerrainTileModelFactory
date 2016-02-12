@@ -26,6 +26,8 @@
 #include <osgEarth/MapFrame>
 #include <osgEarth/Progress>
 
+#include <osg/Texture>
+
 namespace osgEarth
 {
     /**

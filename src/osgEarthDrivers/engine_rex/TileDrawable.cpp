@@ -70,12 +70,15 @@ _skirtSize   ( skirtSize )
     _texMatrixParentUniformNameID = osg::Uniform::getNameID( "oe_layer_texParentMatrix" );
     _texParentExistsUniformNameID = osg::Uniform::getNameID( "oe_layer_texParentExists" );
 
+    _texUniformNameID = osg::Uniform::getNameID( "oe_layer_tex" );
+    _texParentUniformNameID = osg::Uniform::getNameID( "oe_layer_texParent" );
+
     _textureImageUnit       = SamplerBinding::findUsage(bindings, SamplerBinding::COLOR)->unit();
     _textureParentImageUnit = SamplerBinding::findUsage(bindings, SamplerBinding::COLOR_PARENT)->unit();
     
     int tileSize2 = tileSize*tileSize;
     _heightCache = new float[ tileSize2 ];
-    for(int i=0; i<tileSize2; ++i) _heightCache[i] = 0.0f;    
+    for(int i=0; i<tileSize2; ++i) _heightCache[i] = 0.0f;   
 }
 
 TileDrawable::~TileDrawable()
@@ -193,22 +196,24 @@ TileDrawable::drawSurface(osg::RenderInfo& renderInfo, bool renderColor) const
 
             if ( pass._layer->getVisible() && pass._layer->getOpacity() > 0.1 )
             {
-                // Apply the texture.
                 state.setActiveTextureUnit( _textureImageUnit );
-                const osg::StateAttribute* lastTex = state.getLastAppliedTextureAttribute(_textureImageUnit, osg::StateAttribute::TEXTURE);
-                if ( lastTex != pass._texture.get() )
+                //const osg::StateAttribute* lastTex = state.getLastAppliedTextureAttribute(_textureImageUnit, osg::StateAttribute::TEXTURE);
+                //if ( lastTex != pass._texture.get() )
+                {
                     pass._texture->apply( state );
+                }
 
                 // Apply the texture matrix.
                 ext->glUniformMatrix4fv( texMatrixLocation, 1, GL_FALSE, pass._textureMatrix.ptr() );
+
 
                 bool texParentExists = pass._parentTexture.valid();
                 if ( texParentExists )
                 {
                     // Apply the parent texture.
                     state.setActiveTextureUnit( _textureParentImageUnit );
-                    const osg::StateAttribute* lastTex = state.getLastAppliedTextureAttribute(_textureParentImageUnit, osg::StateAttribute::TEXTURE);
-                    if ( lastTex != pass._parentTexture.get() )
+                    //const osg::StateAttribute* lastTex = state.getLastAppliedTextureAttribute(_textureParentImageUnit, osg::StateAttribute::TEXTURE);
+                    //if ( lastTex != pass._parentTexture.get() )
                         pass._parentTexture->apply( state );
 
                     // Apply the parent texture matrix.
@@ -220,6 +225,7 @@ TileDrawable::drawSurface(osg::RenderInfo& renderInfo, bool renderColor) const
                     texParentExists_lastValue = texParentExists;
                     ext->glUniform1f( texParentExistsLocation, texParentExists? 1.0f : 0.0f );
                 }
+
 
                 // Order uniform (TODO: evaluate whether we still need this)
                 if ( orderLocation >= 0 )

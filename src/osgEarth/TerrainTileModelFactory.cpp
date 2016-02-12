@@ -20,6 +20,7 @@
 #include <osgEarth/Registry>
 #include <osgEarth/ImageUtils>
 #include <osgEarth/ImageToHeightFieldConverter>
+#include <osgEarth/Texture>
 
 #include <osg/Texture2D>
 
@@ -326,7 +327,8 @@ osg::Texture*
 TerrainTileModelFactory::createImageTexture(osg::Image*       image,
                                             const ImageLayer* layer) const
 {
-    osg::Texture2D* tex = new osg::Texture2D( image );
+    osg::Texture2D* tex = new Texture2DEXT( image );
+    tex->setName("Image");
 
     tex->setWrap( osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE );
     tex->setWrap( osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE );
@@ -354,7 +356,8 @@ osg::Texture*
 TerrainTileModelFactory::createCoverageTexture(osg::Image*       image,
                                                const ImageLayer* layer) const
 {
-    osg::Texture2D* tex = new osg::Texture2D( image );
+    osg::Texture2D* tex = new Texture2DEXT( image ); //new osg::Texture2D( image );
+    tex->setName("Coverage");
 
     tex->setWrap( osg::Texture::WRAP_S, osg::Texture::CLAMP_TO_EDGE );
     tex->setWrap( osg::Texture::WRAP_T, osg::Texture::CLAMP_TO_EDGE );
@@ -371,7 +374,8 @@ TerrainTileModelFactory::createCoverageTexture(osg::Image*       image,
 osg::Texture*
 TerrainTileModelFactory::createElevationTexture(osg::Image* image) const
 {
-    osg::Texture2D* tex = new osg::Texture2D( image );
+    Texture2DEXT* tex = new Texture2DEXT( image ); //new osg::Texture2D( image );
+    tex->setName("Elevation");
     tex->setInternalFormat(GL_LUMINANCE32F_ARB);
     tex->setSourceFormat(GL_LUMINANCE);
     tex->setFilter( osg::Texture::MAG_FILTER, osg::Texture::LINEAR );
@@ -386,7 +390,8 @@ TerrainTileModelFactory::createElevationTexture(osg::Image* image) const
 osg::Texture*
 TerrainTileModelFactory::createNormalTexture(osg::Image* image) const
 {
-    osg::Texture2D* tex = new osg::Texture2D( image );
+    osg::Texture2D* tex = new Texture2DEXT( image ); //new osg::Texture2D( image );
+    tex->setName("Normal");
     tex->setInternalFormatMode(osg::Texture::USE_IMAGE_DATA_FORMAT);
     tex->setFilter( osg::Texture::MAG_FILTER, osg::Texture::LINEAR );
     tex->setFilter( osg::Texture::MIN_FILTER, osg::Texture::LINEAR_MIPMAP_LINEAR );
