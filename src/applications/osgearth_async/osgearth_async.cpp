@@ -62,11 +62,22 @@ public:
 
     void operator()(osg::Object*)
     {
+        if (_before)
+        {
+            _before(_url);
+        }
         _image = osgDB::readImageFile(_url);
+        if (_after)
+        {
+            _after(_url);
+        }
     }
 
     osg::ref_ptr< osg::Image > _image;
     std::string _url;
+
+    std::function< void(const std::string&) > _before;
+    std::function< void(const std::string&) > _after;
 };
 
 class LoadImageLayerOperation : public osg::Operation
@@ -88,6 +99,29 @@ public:
     osg::ref_ptr< osgEarth::ImageLayer > _layer;
     TileKey _key;
 };
+
+class LoadLambdaOperation : public osg::Operation
+{
+public:
+    LoadLambdaOperation(std::function< osg::Image*(const TileKey&) > callback, const TileKey& key):      
+      _callback(callback),
+      _key(key)
+    {
+    }
+
+    void operator()(osg::Object*)
+    {
+        if (_callback)
+        {
+            _image = _callback(_key);
+        }        
+    }
+
+    osg::ref_ptr< osg::Image > _image;    
+    TileKey _key;
+    std::function< osg::Image*(const TileKey&) > _callback;
+};
+
 
 static int currentFrame = 0;
 static int numMerged = 0;
@@ -115,6 +149,9 @@ public:
               if (!_operation.valid())
               {
                   _operation = new LoadImageOperation(_url);
+                  // Play with lambda expression.
+                  _operation->_before = [](const std::string& url){ std::cout << "Before " << url << std::endl; };
+                  _operation->_after = [](const std::string& url){ std::cout << "After " << url << std::endl; };
                   queue->add( _operation );
               }
 
@@ -240,6 +277,84 @@ public:
       osg::ref_ptr< LoadImageLayerOperation > _operation;
 };
 
+class AsyncLambdaImage : public osg::Image
+{
+public:
+    AsyncLambdaImage(osg::Image* placeHolder, const TileKey& key, std::function< osg::Image*(const TileKey&) > callback):
+          _placeHolder(placeHolder),          
+          _key(key),
+          _callback(callback)
+      {
+          assignToPlaceHolder();          
+      }
+
+      virtual bool requiresUpdateCall() const { return true; }
+
+      /** update method for osg::Image subclasses that update themselves during the update traversal.*/
+      virtual void update(osg::NodeVisitor* nv)
+      {
+          //OpenThreads::ScopedLock<OpenThreads::Mutex> lock(_mutex);
+          //OE_NOTICE << "Update " << _url  << " time=" << fs->getSimulationTime() << std::endl;
+
+          const osg::FrameStamp* fs = nv->getFrameStamp();
+
+          if (!_image.valid())
+          {
+              if (!_operation.valid())
+              {
+                  _operation = new LoadLambdaOperation(_callback, _key);
+                  queue->add( _operation );
+              }
+
+              if (_operation->_image.valid())
+              {
+                  if (fs->getFrameNumber() != currentFrame)
+                  {
+                      currentFrame = fs->getFrameNumber();
+                      numMerged = 0;
+                  }
+
+                  //if (numMerged < maxMergesPerFrame)
+                  {                  
+                      _image = _operation->_image.get();
+                      assignToImage();
+                      numMerged++;
+                  }
+
+                  _operation = 0;
+              }
+          }
+      }
+
+      void assignToPlaceHolder()
+      {
+          if (_placeHolder.valid())
+          {
+              unsigned char* data = new unsigned char[ _placeHolder->getTotalSizeInBytes() ];
+              memcpy(data, _placeHolder->data(), _placeHolder->getTotalSizeInBytes());
+              Image::setImage(_placeHolder->s(), _placeHolder->t(), _placeHolder->r(), _placeHolder->getInternalTextureFormat(), _placeHolder->getPixelFormat(), _placeHolder->getDataType(), data, osg::Image::USE_NEW_DELETE, _placeHolder->getPacking());                            
+          }
+      }
+
+      void assignToImage()
+      {
+          if (_image.valid())
+          {
+              unsigned char* data = new unsigned char[ _image->getTotalSizeInBytes() ];
+              memcpy(data, _image->data(), _image->getTotalSizeInBytes());
+              Image::setImage(_image->s(), _image->t(), _image->r(), _image->getInternalTextureFormat(), _image->getPixelFormat(), _image->getDataType(), data, osg::Image::USE_NEW_DELETE, _image->getPacking());                            
+          }
+      }
+
+      osg::ref_ptr< osg::Image > _placeHolder;
+      osg::ref_ptr< osg::Image > _image;
+      TileKey _key;
+      osg::ref_ptr< LoadLambdaOperation > _operation;
+      std::function< osg::Image*(const TileKey&) > _callback;
+};
+
+
+
 osg::Node* makeURLTile(const TileKey& key)
 {
     osg::Geometry* geometry = new osg::Geometry;
@@ -325,6 +440,45 @@ osg::Node* makeLayerTile(ImageLayer* layer, const TileKey& key)
     return geode;
 }
 
+osg::Node* makeLambdaTile(std::function< osg::Image*(const TileKey&) > callback, const TileKey& key)
+{
+    osg::Geometry* geometry = new osg::Geometry;
+
+    unsigned int numRows, numCols;
+    key.getProfile()->getNumTiles(key.getLevelOfDetail(), numCols, numRows);
+    unsigned int y  = numRows - key.getTileY() - 1;
+    
+
+    osg::Vec3Array* verts = new osg::Vec3Array;
+    verts->push_back(osg::Vec3(key.getTileX(), 0, y));
+    verts->push_back(osg::Vec3(key.getTileX() + 1.0, 0, y));
+    verts->push_back(osg::Vec3(key.getTileX() + 1.0, 0, y + 1.0));
+    verts->push_back(osg::Vec3(key.getTileX(), 0, y + 1.0));
+    geometry->setVertexArray(verts);
+
+    osg::Vec2Array* texCoords = new osg::Vec2Array;
+    texCoords->push_back(osg::Vec2f(0.0f, 0.0f));
+    texCoords->push_back(osg::Vec2f(1.0f, 0.0f));
+    texCoords->push_back(osg::Vec2f(1.0f, 1.0f));
+    texCoords->push_back(osg::Vec2f(0.0f, 1.0f));
+    geometry->setTexCoordArray(0, texCoords);
+    geometry->setTexCoordArray(1, texCoords);
+
+    osg::Texture2D *texture = new osg::Texture2D;
+    texture->setResizeNonPowerOfTwoHint(false);    
+    //texture->setImage(new AsyncLayerImage(getPlaceHolder(), layer, key));
+    texture->setImage(new AsyncLambdaImage(getPlaceHolder(), key, callback));
+    geometry->getOrCreateStateSet()->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
+
+    geometry->setUseVertexBufferObjects(true);
+    geometry->setUseDisplayList(false);
+    geometry->addPrimitiveSet(new osg::DrawArrays(GL_QUADS, 0, verts->size()));
+
+    osg::Geode* geode =new osg::Geode;
+    geode->addDrawable( geometry );
+    return geode;
+}
+
 int
 main(int argc, char** argv)
 {
@@ -364,13 +518,33 @@ main(int argc, char** argv)
         {
             TileKey key(lod, c, r, profile);
             //root->addChild(makeURLTile(key));
-            root->addChild(makeLayerTile(layer, key));
+
+            //root->addChild(makeLayerTile(layer, key));
+
+            root->addChild(makeLambdaTile([layer](const TileKey& key) -> osg::Image* {
+                GeoImage img = layer->createImage(key);
+                return img.getImage();
+            } , key));
         }
     }
     OE_NOTICE << "Added " << wide * high << " tiles" << std::endl;
 
     viewer.setSceneData( root );
     viewer.setCameraManipulator(new osgGA::TrackballManipulator());
+
+    // create sample data
+    std::vector<int> vec;
+    vec.push_back(1);
+    vec.push_back(2);
+    vec.push_back(3);
+    vec.push_back(4);
+    vec.push_back(5);
+
+    // for_each using lambda
+    std::cout << "All numbers" << std::endl;
+    std::for_each(vec.begin(), vec.end(), [](int n) { std::cout << n << std::endl; });
+
+ 
 
     while (!viewer.done())
     {
