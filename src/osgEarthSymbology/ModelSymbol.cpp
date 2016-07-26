@@ -173,10 +173,10 @@ ModelSymbol::parseSLD(const Config& c, Style& style)
         style.getOrCreate<ModelSymbol>()->name() = StringExpression(c.value());
     }
     else if ( match(c.key(), "model-max-size-x") ) {
-        //todo - may not need this.
+        style.getOrCreate<ModelSymbol>()->maxSizeX() = as<float>(c.value(), FLT_MAX);
     }
     else if ( match(c.key(), "model-max-size-y") ) {
-        //todo - may not need this.
+        style.getOrCreate<ModelSymbol>()->maxSizeY() = as<float>(c.value(), FLT_MAX);
     }
 }
 

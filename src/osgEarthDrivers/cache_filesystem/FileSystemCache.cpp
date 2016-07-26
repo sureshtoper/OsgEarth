@@ -124,7 +124,7 @@ namespace
         std::string                       _binPath;        // full path to the bin's root folder
         osg::ref_ptr<osgDB::ReaderWriter> _rw;
         osg::ref_ptr<osgDB::Options>      _zlibOptions;
-        Threading::ReadWriteMutex         _rwmutex;
+        mutable Threading::Mutex          _mutex;
     };
 
     void writeMeta( const std::string& fullPath, const Config& meta )
@@ -344,7 +344,8 @@ namespace
 
         osgDB::ReaderWriter::ReadResult r;
         {
-            ScopedReadLock sharedLock( _rwmutex );
+            ScopedMutexLock lock(_mutex);
+
             r = _rw->readImage( path, dbo.get() );
             if ( !r.success() )
                 return ReadResult();
@@ -380,7 +381,8 @@ namespace
 
         osgDB::ReaderWriter::ReadResult r;
         {
-            ScopedReadLock sharedLock( _rwmutex );
+            ScopedMutexLock lock(_mutex);
+
             r = _rw->readObject( path, dbo.get() );
             if ( !r.success() )
                 return ReadResult();
@@ -428,7 +430,7 @@ namespace
         bool objWriteOK = false;
         {
             // prevent cache contention:
-            ScopedWriteLock exclusiveLock( _rwmutex );
+            ScopedMutexLock lock(_mutex);
 
             // make a home for it..
             if ( !osgDB::fileExists( osgDB::getFilePath(fileURI.full()) ) )
@@ -496,6 +498,8 @@ namespace
         if ( !binValidForReading() ) return false;
         URI fileURI( getHashedKey(key), _metaPath );
         std::string path( fileURI.full() + OSG_EXT );
+
+        ScopedMutexLock lock(_mutex);
         return ::unlink( path.c_str() ) == 0;
     }
 
@@ -505,6 +509,8 @@ namespace
         if ( !binValidForReading() ) return false;
         URI fileURI( getHashedKey(key), _metaPath );
         std::string path( fileURI.full() + OSG_EXT );
+
+        ScopedMutexLock lock(_mutex);
         return osgEarth::touchFile( path );
     }
 
@@ -512,6 +518,8 @@ namespace
     FileSystemCacheBin::purgeDirectory( const std::string& dir )
     {
         if ( !binValidForReading() ) return false;
+
+        ScopedMutexLock lock(_mutex);
 
         bool allOK = true;
         osgDB::DirectoryContents dc = osgDB::getDirectoryContents( dir );
@@ -555,7 +563,7 @@ namespace
         if ( !binValidForReading() )
             return false;
 
-        ScopedWriteLock exclusiveLock( _rwmutex );
+        ScopedMutexLock lock(_mutex);
         std::string binDir = osgDB::getFilePath( _metaPath );
         return purgeDirectory( binDir );
     }
@@ -564,9 +572,9 @@ namespace
     FileSystemCacheBin::readMetadata()
     {
         if ( !binValidForReading() ) return Config();
-
-        ScopedReadLock sharedLock( _rwmutex );
         
+        ScopedMutexLock lock(_mutex);
+
         Config conf;
         conf.fromJSON( URI(_metaPath).getString(_zlibOptions.get()) );
 
@@ -577,8 +585,8 @@ namespace
     FileSystemCacheBin::writeMetadata( const Config& conf )
     {
         if ( !binValidForWriting() ) return false;
-
-        ScopedWriteLock exclusiveLock( _rwmutex );
+        
+        ScopedMutexLock lock(_mutex);
 
         std::fstream output( _metaPath.c_str(), std::ios_base::out );
         if ( output.is_open() )

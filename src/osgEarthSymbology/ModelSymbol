@@ -91,6 +91,8 @@ namespace osgEarth { namespace Symbology
         /** Model instance scale factor */
         optional<NumericExpression>& scaleZ() { return _scaleZ; }
         const optional<NumericExpression>& scaleZ() const { return _scaleZ; }
+
+        
         
     public: // non-serialized properties (for programmatic use only)
 

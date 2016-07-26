@@ -24,6 +24,7 @@
 #include <osgEarth/Containers>
 #include <osgEarth/Utils>
 #include <osgEarth/VirtualProgram>
+#include <osgEarth/Extension>
 #include <osgEarthAnnotation/BboxDrawable>
 #include <osgUtil/RenderBin>
 #include <osgUtil/StateGraph>
@@ -69,6 +70,44 @@ namespace
             else
             {
                 return ( lhs->_depth < rhs->_depth );
+            }
+        }
+    };
+
+    // Custom sorting functor that sorts drawables by Priority, and when drawables share the
+    // same parent Geode, sorts them in traversal order.
+    struct SortByPriorityPreservingGeodeTraversalOrder : public DeclutterSortFunctor
+    {
+        bool operator()( const osgUtil::RenderLeaf* lhs, const osgUtil::RenderLeaf* rhs ) const
+        {
+            const osg::Node* lhsParentNode = lhs->getDrawable()->getParent(0);
+            if ( lhsParentNode == rhs->getDrawable()->getParent(0) )
+            {
+                const osg::Geode* geode = static_cast<const osg::Geode*>(lhsParentNode);
+                return geode->getDrawableIndex(lhs->getDrawable()) > geode->getDrawableIndex(rhs->getDrawable());
+            }
+
+            else
+            {            
+                const ScreenSpaceLayoutData* lhsdata = dynamic_cast<const ScreenSpaceLayoutData*>(lhs->getDrawable()->getUserData());
+                float lhsPriority = lhsdata ? lhsdata->_priority : 0.0f;
+    
+                const ScreenSpaceLayoutData* rhsdata = dynamic_cast<const ScreenSpaceLayoutData*>(rhs->getDrawable()->getUserData());
+                float rhsPriority = rhsdata ? rhsdata->_priority : 0.0f;
+
+                float diff = lhsPriority - rhsPriority;
+
+                if ( diff != 0.0f )
+                    return diff > 0.0f;
+
+                // first fallback on depth:
+                diff = lhs->_depth - rhs->_depth;
+                if ( diff != 0.0f )
+                    return diff < 0.0f;
+
+                // then fallback on traversal order.
+                diff = float(lhs->_traversalNumber) - float(rhs->_traversalNumber);
+                return diff < 0.0f;
             }
         }
     };
@@ -304,6 +343,8 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                     offset.set( layoutData->_pixelOffset.x(), layoutData->_pixelOffset.y(), 0.f );
                 }
 
+                offset = refCamScaleMat * offset;
+
                 // handle the local translation
                 box.xMin() += offset.x();
                 box.xMax() += offset.x();
@@ -355,7 +396,7 @@ struct /*internal*/ DeclutterSort : public osgUtil::RenderBin::SortCallback
                 
                 if ( info._lastXY.x() == winPos.x() && info._lastXY.y() == winPos.y() )
                 {
-                    // Quanitize the window draw coordinates so mitigate text rendering filtering anomalies.
+                    // Quanitize the window draw coordinates to mitigate text rendering filtering anomalies.
                     // Drawing text glyphs on pixel boundaries mitigates aliasing.
                     // Adding 0.5 will cause the GPU to sample the glyph texels exactly on center.
                     winPos.x() = floor(winPos.x()) + 0.5;
@@ -831,7 +872,7 @@ ScreenSpaceLayout::setOptions( const ScreenSpaceLayoutOptions& options )
         if ( options.sortByPriority().isSetTo( true ) &&
              bin->_context->_options.sortByPriority() == false )
         {
-            ScreenSpaceLayout::setSortFunctor(new DeclutterByPriority());
+            ScreenSpaceLayout::setSortFunctor(new SortByPriorityPreservingGeodeTraversalOrder());
         }
         
         // communicate the new options on the shared context.
@@ -860,32 +901,30 @@ ScreenSpaceLayout::getOptions()
 
 //----------------------------------------------------------------------------
 
-bool
-DeclutterByPriority::operator()(const osgUtil::RenderLeaf* lhs, const osgUtil::RenderLeaf* rhs ) const
-{
-    const ScreenSpaceLayoutData* lhsdata = dynamic_cast<const ScreenSpaceLayoutData*>(lhs->getDrawable()->getUserData());
-    float lhsPriority = lhsdata ? lhsdata->_priority : 0.0f;
-    
-    const ScreenSpaceLayoutData* rhsdata = dynamic_cast<const ScreenSpaceLayoutData*>(rhs->getDrawable()->getUserData());
-    float rhsPriority = rhsdata ? rhsdata->_priority : 0.0f;
-
-    float diff = lhsPriority - rhsPriority;
-
-    if ( diff != 0.0f )
-        return diff > 0.0f;
-
-    // first fallback on depth:
-    diff = lhs->_depth - rhs->_depth;
-    if ( diff != 0.0f )
-        return diff < 0.0f;
-
-    // then fallback on traversal order.
-    diff = float(lhs->_traversalNumber) - float(rhs->_traversalNumber);
-    return diff < 0.0f;
-}
-
-//----------------------------------------------------------------------------
-
 /** the actual registration. */
 extern "C" void osgEarth_declutter(void) {}
 static osgEarthRegisterRenderBinProxy<osgEarthScreenSpaceLayoutRenderBin> s_regbin(OSGEARTH_SCREEN_SPACE_LAYOUT_BIN);
+
+
+//----------------------------------------------------------------------------
+
+// Extension for configuring the decluterring/SSL options from an Earth file.
+namespace osgEarth
+{
+    class ScreenSpaceLayoutExtension : public Extension,
+                                       public ScreenSpaceLayoutOptions
+    {
+    public:
+        META_osgEarth_Extension(ScreenSpaceLayoutExtension);
+
+        ScreenSpaceLayoutExtension(const ConfigOptions& co) : ScreenSpaceLayoutOptions(co)
+        {
+            // sets the global default options.
+            ScreenSpaceLayout::setOptions(*this);
+        }
+    };
+
+    REGISTER_OSGEARTH_EXTENSION(osgearth_screen_space_layout, ScreenSpaceLayoutExtension);
+    REGISTER_OSGEARTH_EXTENSION(osgearth_decluttering,        ScreenSpaceLayoutExtension);
+}
+                                       

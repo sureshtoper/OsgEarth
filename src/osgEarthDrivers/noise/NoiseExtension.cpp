@@ -26,13 +26,16 @@ using namespace osgEarth::Noise;
 #define LC "[NoiseExtension] "
 
 
+REGISTER_OSGEARTH_EXTENSION( osgearth_noise, NoiseExtension )
+
+
 NoiseExtension::NoiseExtension()
 {
     //nop
 }
 
 NoiseExtension::NoiseExtension(const NoiseOptions& options) :
-_options( options )
+NoiseOptions( options )
 {
     //nop
 }
@@ -57,12 +60,10 @@ NoiseExtension::connect(MapNode* mapNode)
         return false;
     }
 
-    _effect = new NoiseTerrainEffect( _options );
+    _effect = new NoiseTerrainEffect( *this );
 
     mapNode->getTerrainEngine()->addEffect( _effect.get() );
     
-    OE_INFO << LC << "Installed!\n";
-
     return true;
 }
 

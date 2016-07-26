@@ -35,19 +35,15 @@ namespace osgEarth { namespace Annotation
                                                     public ConfigOptions
     {
     public:
-        META_Object(osgEarthAnnotations, AnnotationExtension);
+        META_osgEarth_Extension(AnnotationExtension);
 
-        // CTORs
-        AnnotationExtension();
         AnnotationExtension(const ConfigOptions& options);
-
-        // DTOR
-        virtual ~AnnotationExtension();
-
 
     public: // Extension
 
-        void setDBOptions(const osgDB::Options* dbOptions);
+        void setDBOptions(const osgDB::Options* readOptions);
+
+        const ConfigOptions& getConfigOptions() const { return *this; }
 
 
     public: // ExtensionInterface<MapNode>
@@ -55,10 +51,6 @@ namespace osgEarth { namespace Annotation
         bool connect(MapNode* mapNode);
 
         bool disconnect(MapNode* mapNode);
-
-
-    protected: // Object
-        AnnotationExtension(const AnnotationExtension& rhs, const osg::CopyOp& op) { }
 
     private:
         osg::ref_ptr<const osgDB::Options> _dbo;

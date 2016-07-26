@@ -102,7 +102,7 @@ struct OSGEarthShaderGenPseudoLoader : public osgDB::ReaderWriter
         this->supportsExtension( SHADERGEN_PL_EXTENSION, "ShaderGen pseudoloader" );
     }
 
-    const char* className()
+    const char* className() const
     {
         return "OSGEarth ShaderGen pseudoloader";
     }
@@ -310,7 +310,8 @@ namespace
 //...........................................................................
 
 ShaderGenerator::GenBuffers::GenBuffers() :
-_version( GLSL_VERSION )
+_version( GLSL_VERSION ),
+_stateSet(0L)
 {
     //nop
 }
@@ -593,6 +594,11 @@ ShaderGenerator::apply( osg::Drawable* drawable )
 {
     if ( drawable )
     {
+        if (_drawablesVisited.find(drawable) != _drawablesVisited.end())
+            return;
+        else
+            _drawablesVisited.insert(drawable);
+
         osg::ref_ptr<osg::StateSet> ss = drawable->getStateSet();
         if ( ss.valid() )
         {

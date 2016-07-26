@@ -32,10 +32,10 @@
 #include <osgEarthUtil/Shadowing>
 #include <osgEarthUtil/ActivityMonitorTool>
 #include <osgEarthUtil/LogarithmicDepthBuffer>
+#include <osgEarthUtil/ContourMap>
 
 #include <osgEarthUtil/LODBlending>
 #include <osgEarthUtil/VerticalScale>
-#include <osgEarthUtil/ContourMap>
 
 #include <osgEarthAnnotation/AnnotationData>
 #include <osgEarthAnnotation/AnnotationRegistry>
@@ -66,6 +66,8 @@ using namespace osgEarth::Util::Controls;
 using namespace osgEarth::Symbology;
 using namespace osgEarth::Annotation;
 using namespace osgEarth::Drivers;
+
+namespace ui = osgEarth::Util::Controls;
 
 //------------------------------------------------------------------------
 
@@ -172,212 +174,6 @@ MouseCoordsControlFactory::create(MapNode*         mapNode,
     view->addEventHandler( mcTool );
 
     return readout;
-}
-
-//------------------------------------------------------------------------
-
-namespace
-{
-    struct SkyHoursSlider : public ControlEventHandler
-    {
-        SkyHoursSlider(SkyNode* sky) : _sky(sky)  { }
-        SkyNode* _sky;
-        virtual void onValueChanged( class Control* control, float value )
-        {
-            DateTime d = _sky->getDateTime();
-            _sky->setDateTime(DateTime(d.year(), d.month(), d.day(), value));
-        }
-    };
-
-    struct SkyMonthSlider : public ControlEventHandler
-    {
-        SkyMonthSlider(SkyNode* sky) : _sky(sky)  { }
-        SkyNode* _sky;
-        virtual void onValueChanged( class Control* control, float value )
-        {
-            DateTime d = _sky->getDateTime();            
-            _sky->setDateTime(DateTime(d.year(), (int)value, d.day(), d.hours()));
-        }
-    };
-
-    struct SkyYearSlider : public ControlEventHandler
-    {
-        SkyYearSlider(SkyNode* sky) : _sky(sky)  { }
-        SkyNode* _sky;
-        virtual void onValueChanged( class Control* control, float value )
-        {
-            DateTime d = _sky->getDateTime();            
-            _sky->setDateTime(DateTime((int)value, d.month(), d.day(), d.hours()));
-        }
-    };
-
-//#undef USE_AMBIENT_SLIDER
-#define USE_AMBIENT_SLIDER 1
-
-#ifdef USE_AMBIENT_SLIDER
-    struct AmbientBrightnessHandler : public ControlEventHandler
-    {
-        AmbientBrightnessHandler(SkyNode* sky) : _sky(sky) { }
-
-        SkyNode* _sky;
-
-        virtual void onValueChanged( class Control* control, float value )
-        {
-            _sky->setMinimumAmbient(osg::Vec4(value,value,value,1));
-        }
-    };
-#endif
-
-    struct AnimateSkyUpdateCallback : public osg::NodeCallback
-    {    
-        /**
-        * Creates an AnimateSkyCallback.  
-        * @param rate    The time multipler from real time.  Default of 1440 means 1 minute real time will equal 1 day simulation time.
-        */
-        AnimateSkyUpdateCallback( double rate = 1440 ):
-            _rate( rate ),
-            _prevTime( -1 ),
-            _accumTime( 0.0 )
-        {
-        }
-
-        virtual void operator()(osg::Node* node, osg::NodeVisitor* nv)
-        {             
-            SkyNode* sky = dynamic_cast< SkyNode* >( node );
-            if (sky)
-            {            
-                double time = nv->getFrameStamp()->getSimulationTime();            
-                if (_prevTime > 0)
-                {                
-                    TimeStamp t = sky->getDateTime().asTimeStamp();                  
-                    double delta = ceil((time - _prevTime) * _rate);
-                    _accumTime += delta;
-                    // The time stamp only works in seconds so we wait until we've accumulated at least 1 second to change the date.
-                    if (_accumTime > 1.0)
-                    {
-                        double deltaS = floor(_accumTime );                    
-                        _accumTime -= deltaS;
-                        t += deltaS;
-                        sky->setDateTime( t );                        
-                    }                
-                }            
-                _prevTime = time;
-            }
-            traverse( node, nv );
-        }
-
-        double _accumTime;
-        double _prevTime;    
-        double _rate;
-    };
-
-}
-
-Control*
-SkyControlFactory::create(SkyNode*         sky,
-                          osgViewer::View* view) const
-{
-    Grid* grid = new Grid();
-    grid->setChildVertAlign( Control::ALIGN_CENTER );
-    grid->setChildSpacing( 10 );
-    grid->setHorizFill( true );
-    
-    DateTime dt = sky->getDateTime();
-
-    int r=0;
-    grid->setControl( 0, r, new LabelControl("Time (Hours UTC): ", 16) );
-    HSliderControl* skyHoursSlider = grid->setControl(1, r, new HSliderControl( 0.0f, 24.0f, dt.hours() ));
-    skyHoursSlider->setHorizFill( true, 250 );
-    skyHoursSlider->addEventHandler( new SkyHoursSlider(sky) );
-    grid->setControl(2, r, new LabelControl(skyHoursSlider) );
-    
-    ++r;
-    grid->setControl( 0, r, new LabelControl("Month: ", 16) );
-    HSliderControl* skyMonthSlider = grid->setControl(1, r, new HSliderControl( 0.0f, 11.0f, dt.month() ));
-    skyMonthSlider->setHorizFill( true, 250 );
-    skyMonthSlider->addEventHandler( new SkyMonthSlider(sky) );
-    grid->setControl(2, r, new LabelControl(skyMonthSlider) );
-    
-    ++r;
-    grid->setControl( 0, r, new LabelControl("Year: ", 16) );
-    HSliderControl* skyYearSlider = grid->setControl(1, r, new HSliderControl( 1970.0f, 2061.0f, dt.year() ));
-    skyYearSlider->setHorizFill( true, 250 );
-    skyYearSlider->addEventHandler( new SkyMonthSlider(sky) );
-    grid->setControl(2, r, new LabelControl(skyYearSlider) );
-
-#ifdef USE_AMBIENT_SLIDER
-    ++r;
-    grid->setControl(0, r, new LabelControl("Min.Ambient: ", 16) );
-    HSliderControl* ambient = grid->setControl(1, r, new HSliderControl(0.0f, 1.0f, sky->getSunLight()->getAmbient().r()));
-    ambient->addEventHandler( new AmbientBrightnessHandler(sky) );
-    grid->setControl(2, r, new LabelControl(ambient) );
-#endif
-
-    return grid;
-}
-
-//------------------------------------------------------------------------
-
-namespace
-{
-    struct ChangeSeaLevel : public ControlEventHandler
-    {
-        ChangeSeaLevel( OceanNode* ocean ) : _ocean(ocean) { }
-
-        OceanNode* _ocean;
-
-        virtual void onValueChanged( class Control* control, float value )
-        {
-            _ocean->setSeaLevel( value );
-        }
-    };
-
-    struct ChangeSeaAlpha : public ControlEventHandler
-    {
-        ChangeSeaAlpha( OceanNode* ocean ) : _ocean(ocean) { }
-
-        OceanNode* _ocean;
-
-        virtual void onValueChanged( class Control* control, float value )
-        {
-            _ocean->setAlpha( value );
-        }
-    };
-}
-
-Control*
-OceanControlFactory::create(OceanNode* ocean) const
-{
-    VBox* main = new VBox();
-
-    HBox* sealLevelBox = main->addControl(new HBox());
-    sealLevelBox->setChildVertAlign( Control::ALIGN_CENTER );
-    sealLevelBox->setChildSpacing( 10 );
-    sealLevelBox->setHorizFill( true );
-
-    sealLevelBox->addControl( new LabelControl("Sea Level: ", 16) );
-
-    HSliderControl* mslSlider = sealLevelBox->addControl(new HSliderControl( -250.0f, 250.0f, 0.0f ));
-    mslSlider->setBackColor( Color::Gray );
-    mslSlider->setHeight( 12 );
-    mslSlider->setHorizFill( true, 200 );
-    mslSlider->addEventHandler( new ChangeSeaLevel(ocean) );
-
-    HBox* alphaBox = main->addControl(new HBox());
-    alphaBox->setChildVertAlign( Control::ALIGN_CENTER );
-    alphaBox->setChildSpacing( 10 );
-    alphaBox->setHorizFill( true );
-    
-    alphaBox->addControl( new LabelControl("Sea Alpha: ", 16) );
-
-    HSliderControl* alphaSlider = alphaBox->addControl(new HSliderControl( 0.0, 1.0, 1.0));
-    alphaSlider->setBackColor( Color::Gray );
-    alphaSlider->setHeight( 12 );
-    alphaSlider->setHorizFill( true, 200 );
-    alphaSlider->addEventHandler( new ChangeSeaAlpha(ocean) );
-
-
-    return main;
 }
 
 //------------------------------------------------------------------------
@@ -565,23 +361,17 @@ MapNodeHelper::parse(MapNode*             mapNode,
     osg::ref_ptr<osgDB::Options> dbOptions = Registry::instance()->cloneOrCreateOptions();
 
     // parse out custom example arguments first:
-    bool useSky        = args.read("--sky");
-    bool useOcean      = args.read("--ocean");
     bool useMGRS       = args.read("--mgrs");
     bool useDMS        = args.read("--dms");
     bool useDD         = args.read("--dd");
     bool useCoords     = args.read("--coords") || useMGRS || useDMS || useDD;
-    bool useOrtho      = args.read("--ortho");
+
     bool useAutoClip   = args.read("--autoclip");
-    bool useShadows    = args.read("--shadows");
     bool animateSky    = args.read("--animate-sky");
     bool showActivity  = args.read("--activity");
     bool useLogDepth   = args.read("--logdepth");
     bool useLogDepth2  = args.read("--logdepth2");
     bool kmlUI         = args.read("--kmlui");
-    bool inspect       = args.read("--inspect");
-    bool useContourMap = args.read("--contourmap");
-    bool useMonitor    = args.read("--monitor");
 
     if (args.read("--verbose"))
         osgEarth::setNotifyLevel(osg::INFO);
@@ -635,77 +425,18 @@ MapNodeHelper::parse(MapNode*             mapNode,
     // look for external data in the map node:
     const Config& externals = mapNode->externalConfig();
 
-    const Config& skyConf         = externals.child("sky");
-    const Config& oceanConf       = externals.child("ocean");
-
-    const Config& screenSpaceLayoutConf = 
-        externals.hasChild("screen_space_layout") ? externals.child("screen_space_layout") :
-        externals.child("decluttering"); // backwards-compatibility
+    //const Config& screenSpaceLayoutConf = 
+    //    externals.hasChild("screen_space_layout") ? externals.child("screen_space_layout") :
+    //    externals.child("decluttering"); // backwards-compatibility
 
 
     // some terrain effects.
     // TODO: Most of these are likely to move into extensions.
     const Config& lodBlendingConf = externals.child("lod_blending");
     const Config& vertScaleConf   = externals.child("vertical_scale");
-    const Config& contourMapConf  = externals.child("contour_map");
-
-    // Adding a sky model:
-    if ( useSky || !skyConf.empty() )
-    {
-        SkyOptions options(skyConf);
-        if ( options.getDriver().empty() )
-        {
-            if ( mapNode->getMapSRS()->isGeographic() )
-                options.setDriver("simple");
-            else
-                options.setDriver("gl");
-        }
-
-        SkyNode* sky = SkyNode::create(options, mapNode);
-        if ( sky )
-        {
-            sky->attach( view, 0 );
-            if ( mapNode->getNumParents() > 0 )
-            {
-                osgEarth::insertGroup(sky, mapNode->getParent(0));
-            }
-            else
-            {
-                sky->addChild( mapNode );
-                root = sky;
-            }
-                
-            Control* c = SkyControlFactory().create(sky, view);
-            if ( c )
-                mainContainer->addControl( c );
-
-            if (animateSky)
-            {
-                sky->setUpdateCallback( new AnimateSkyUpdateCallback() );
-            }
-
-        }
-    }
-
-    // Adding an ocean model:
-    if ( useOcean || !oceanConf.empty() )
-    {
-        OceanNode* ocean = OceanNode::create(OceanOptions(oceanConf), mapNode);
-        if ( ocean )
-        {
-            // if there's a sky, we want to ocean under it
-            osg::Group* parent = osgEarth::findTopMostNodeOfType<SkyNode>(root);
-            if ( !parent ) parent = root;
-            parent->addChild( ocean );
-
-            Control* c = OceanControlFactory().create(ocean);
-            if ( c )
-                mainContainer->addControl(c);
-        }
-    }
 
     // Shadowing.
-    if ( useShadows )
+    if (args.read("--shadows"))
     {
         int unit;
         if ( mapNode->getTerrainEngine()->getResources()->reserveTextureImageUnit(unit, "ShadowCaster") )
@@ -713,7 +444,7 @@ MapNodeHelper::parse(MapNode*             mapNode,
             ShadowCaster* caster = new ShadowCaster();
             caster->setTextureImageUnit( unit );
             caster->setLight( view->getLight() );
-            caster->getShadowCastingGroup()->addChild( mapNode ); //->getModelLayerGroup() );
+            caster->getShadowCastingGroup()->addChild( mapNode );
             if ( mapNode->getNumParents() > 0 )
             {
                 insertGroup(caster, mapNode->getParent(0));
@@ -761,11 +492,11 @@ MapNodeHelper::parse(MapNode*             mapNode,
         }
     }
 
-    // Configure the de-cluttering engine for labels and annotations:
-    if ( !screenSpaceLayoutConf.empty() )
-    {
-        ScreenSpaceLayout::setOptions( ScreenSpaceLayoutOptions(screenSpaceLayoutConf) );
-    }
+    //// Configure the de-cluttering engine for labels and annotations:
+    //if ( !screenSpaceLayoutConf.empty() )
+    //{
+    //    ScreenSpaceLayout::setOptions( ScreenSpaceLayoutOptions(screenSpaceLayoutConf) );
+    //}
 
     // Configure the mouse coordinate readout:
     if ( useCoords )
@@ -789,7 +520,7 @@ MapNodeHelper::parse(MapNode*             mapNode,
     }
 
     // Configure for an ortho camera:
-    if ( useOrtho )
+    if ( args.read("--ortho") )
     {
         view->getCamera()->setProjectionMatrixAsOrtho(-1, 1, -1, 1, 0, 1);
     }
@@ -867,15 +598,13 @@ MapNodeHelper::parse(MapNode*             mapNode,
     }
 
     // Install a contour map effect.
-    if ( !contourMapConf.empty() || useContourMap )
+    if (args.read("--contourmap"))
     {
-        mapNode->getTerrainEngine()->addEffect( new ContourMap(contourMapConf) );
+        mapNode->addExtension(Extension::create("contourmap", ConfigOptions()));
 
         // with the cmdline switch, hids all the image layer so we can see the contour map.
-        if (useContourMap) {
-            for (unsigned i = 0; i < mapNode->getMap()->getNumImageLayers(); ++i) {
-                mapNode->getMap()->getImageLayerAt(i)->setVisible(false);
-            }
+        for (unsigned i = 0; i < mapNode->getMap()->getNumImageLayers(); ++i) {
+            mapNode->getMap()->getImageLayerAt(i)->setVisible(false);
         }
     }
 
@@ -907,18 +636,32 @@ MapNodeHelper::parse(MapNode*             mapNode,
         }
     }
 
-    if ( inspect )
+    // Map inspector:
+    if (args.read("--inspect"))
     {
         mapNode->addExtension( Extension::create("mapinspector", ConfigOptions()) );
     }
 
-    if (useMonitor)
+    // Memory monitor:
+    if (args.read("--monitor"))
     {
         mapNode->addExtension(Extension::create("monitor", ConfigOptions()) );
     }
+
+    // Simple sky model:
+    if (args.read("--sky"))
+    {
+        mapNode->addExtension(Extension::create("sky_simple", ConfigOptions()) );
+    }
+
+    // Simple ocean model:
+    if (args.read("--ocean"))
+    {
+        mapNode->addExtension(Extension::create("ocean_simple", ConfigOptions()));
+    }
     
 
-    // Process extensions.
+    // Hook up the extensions!
     for(std::vector<osg::ref_ptr<Extension> >::const_iterator eiter = mapNode->getExtensions().begin();
         eiter != mapNode->getExtensions().end();
         ++eiter)
@@ -973,4 +716,105 @@ MapNodeHelper::usage() const
         << "  --out-earth [file]            : write the loaded map to an earth file\n"
         << "  --uniform [name] [min] [max]  : create a uniform controller with min/max values\n"
         << "  --path [file]                 : load and playback an animation path\n";
+}
+
+
+//........................................................................
+
+
+namespace
+{
+    struct SkyHoursSlider : public ui::ControlEventHandler
+    {
+        SkyHoursSlider(SkyNode* sky) : _sky(sky)  { }
+        SkyNode* _sky;
+        void onValueChanged(ui::Control* control, float value )
+        {
+            DateTime d = _sky->getDateTime();
+            _sky->setDateTime(DateTime(d.year(), d.month(), d.day(), value));
+        }
+    };
+    
+    static std::string s_month[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+    struct SkyMonthSlider : public ui::ControlEventHandler
+    {
+        SkyMonthSlider(SkyNode* sky, ui::LabelControl* label) : _sky(sky), _label(label) { }
+        SkyNode* _sky;
+        ui::LabelControl* _label;
+        void onValueChanged(ui::Control* control, float value )
+        {
+            int m = std::min((int)value, 11);
+            DateTime d = _sky->getDateTime();            
+            _sky->setDateTime(DateTime(d.year(), m, d.day(), d.hours()));
+            _label->setText(s_month[m]);
+        }
+    };
+
+    struct SkyYearSlider : public ui::ControlEventHandler
+    {
+        SkyYearSlider(SkyNode* sky, ui::LabelControl* label) : _sky(sky), _label(label) { }
+        SkyNode* _sky;
+        ui::LabelControl* _label;
+        void onValueChanged(ui::Control* control, float value )
+        {
+            DateTime d = _sky->getDateTime();            
+            _sky->setDateTime(DateTime((int)value, d.month(), d.day(), d.hours()));
+            _label->setText(Stringify() << (int)value);
+        }
+    };
+
+    struct AmbientBrightnessHandler : public ui::ControlEventHandler
+    {
+        AmbientBrightnessHandler(SkyNode* sky) : _sky(sky) { }
+
+        SkyNode* _sky;
+
+        void onValueChanged(ui::Control* control, float value )
+        {
+            _sky->setMinimumAmbient(osg::Vec4(value,value,value,1));
+        }
+    };
+}
+
+ui::Control* SkyControlFactory::create(SkyNode* sky)
+{
+    ui::Grid* grid = new ui::Grid();
+    grid->setChildVertAlign( ui::Control::ALIGN_CENTER );
+    grid->setChildSpacing( 10 );
+    grid->setHorizFill( true );
+
+    if (sky)
+    {
+        DateTime dt = sky->getDateTime();
+
+        int r=0;
+        grid->setControl( 0, r, new ui::LabelControl("Hours UTC: ", 16) );
+        ui::HSliderControl* skyHoursSlider = grid->setControl(1, r, new ui::HSliderControl( 0.0f, 24.0f, dt.hours() ));
+        skyHoursSlider->setHorizFill( true, 250 );
+        skyHoursSlider->addEventHandler( new SkyHoursSlider(sky) );
+        grid->setControl(2, r, new ui::LabelControl(skyHoursSlider) );
+    
+        ++r;
+        grid->setControl( 0, r, new ui::LabelControl("Month: ", 16) );
+        ui::HSliderControl* skyMonthSlider = grid->setControl(1, r, new ui::HSliderControl( 0.0f, 12.0f, dt.month() ));
+        skyMonthSlider->setHorizFill( true, 250 );
+        ui::LabelControl* monthLabel = grid->setControl(2, r, new ui::LabelControl(s_month[dt.month()]));
+        skyMonthSlider->addEventHandler( new SkyMonthSlider(sky, monthLabel) );
+    
+        ++r;
+        grid->setControl( 0, r, new ui::LabelControl("Year: ", 16) );
+        ui::HSliderControl* skyYearSlider = grid->setControl(1, r, new ui::HSliderControl( 1970.0f, 2061.0f, dt.year() ));
+        skyYearSlider->setHorizFill( true, 250 );
+        ui::LabelControl* yearLabel = grid->setControl(2, r, new ui::LabelControl(Stringify()<<dt.year()));
+        skyYearSlider->addEventHandler( new SkyYearSlider(sky, yearLabel) );
+
+        ++r;
+        grid->setControl(0, r, new ui::LabelControl("Min.Ambient: ", 16) );
+        ui::HSliderControl* ambient = grid->setControl(1, r, new ui::HSliderControl(0.0f, 1.0f, sky->getSunLight()->getAmbient().r()));
+        ambient->addEventHandler( new AmbientBrightnessHandler(sky) );
+        grid->setControl(2, r, new ui::LabelControl(ambient) );
+    }
+
+    return grid;
 }

@@ -18,7 +18,6 @@
 */
 #include "RexTerrainEngineNode"
 #include "Shaders"
-#include "QuickReleaseGLObjects"
 #include "SelectionInfo"
 
 #include <osgEarth/HeightFieldUtils>
@@ -155,8 +154,7 @@ _tileCount            ( 0 ),
 _tileCreationTime     ( 0.0 ),
 _batchUpdateInProgress( false ),
 _refreshRequired      ( false ),
-_stateUpdateRequired  ( false ),
-_selectionInfo        ( 0L )
+_stateUpdateRequired  ( false )
 {
     // unique ID for this engine:
     _uid = Registry::instance()->createUID();
@@ -399,15 +397,15 @@ RexTerrainEngineNode::setupRenderBindings()
 
 void RexTerrainEngineNode::destroySelectionInfo()
 {
-    if (_selectionInfo)
-    {
-        delete _selectionInfo; _selectionInfo = 0;
-    }
+    //if (_selectionInfo)
+    //{
+    //    delete _selectionInfo; _selectionInfo = 0;
+    //}
 }
 
 void RexTerrainEngineNode::buildSelectionInfo()
 {
-    _selectionInfo = new SelectionInfo;
+//    _selectionInfo = new SelectionInfo;
 }
 
 void
@@ -439,8 +437,8 @@ RexTerrainEngineNode::dirtyTerrain()
     }
 
     // recalculate the LOD morphing parameters:
-    destroySelectionInfo();
-    buildSelectionInfo();
+    //destroySelectionInfo();
+    //buildSelectionInfo();
 
     // clear out the tile registry:
     if ( _liveTiles.valid() )
@@ -514,31 +512,6 @@ RexTerrainEngineNode::dirtyState()
 void
 RexTerrainEngineNode::traverse(osg::NodeVisitor& nv)
 {
-#if 0
-    if ( nv.getVisitorType() == nv.UPDATE_VISITOR && _quickReleaseInstalled == false )
-    {
-        osg::Camera* cam = findFirstParentOfType<osg::Camera>( this );
-        if ( cam )
-        {
-            // get the installed PDC so we can nest them:
-            osg::Camera::DrawCallback* cbToNest = cam->getPostDrawCallback();
-
-            // if it's another QR callback, we'll just replace it.
-            QuickReleaseGLObjects* previousQR = dynamic_cast<QuickReleaseGLObjects*>(cbToNest);
-            if ( previousQR )
-                cbToNest = previousQR->_next.get();
-
-            cam->setPostDrawCallback( new QuickReleaseGLObjects(_deadTiles.get(), cbToNest) );
-
-            _quickReleaseInstalled = true;
-            OE_INFO << LC << "Quick release enabled" << std::endl;
-
-            // knock down the trav count set in the constructor.
-            ADJUST_UPDATE_TRAV_COUNT( this, -1 );
-        }
-    }
-#endif
-
     if ( nv.getVisitorType() == nv.CULL_VISITOR )
     {
         // Inform the registry of the current frame so that Tiles have access
@@ -601,7 +574,7 @@ RexTerrainEngineNode::getEngineContext()
             _deadTiles.get(),
             _renderBindings,
             _terrainOptions,
-            *_selectionInfo,
+            _selectionInfo,
             _tilePatchCallbacks);
     }
 
@@ -723,12 +696,15 @@ RexTerrainEngineNode::createTile( const TileKey& key )
         }
     }
 
+    // cannot happen (says coverity; see loop above), so commenting this out -gw
+#if 0
     if (!populated)
     {
         // We have no heightfield so just create a reference heightfield.
         out_hf = HeightFieldUtils::createReferenceHeightField( key.getExtent(), 257, 257);
         sampleKey = key;
     }
+#endif
 
     GeoHeightField geoHF( out_hf.get(), sampleKey.getExtent() );    
     if (sampleKey != key)

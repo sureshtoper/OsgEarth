@@ -241,7 +241,8 @@ class ReaderWriterEarth : public osgDB::ReaderWriter
             else if ( docConf.hasChild( "earth" ) )
                 conf = docConf.child( "earth" );
 
-            MapNode* mapNode =0L;
+            osg::ref_ptr<osg::Node> node;
+
             if ( !conf.empty() )
             {
                 // see if we were given a reference URI to use:
@@ -251,7 +252,7 @@ class ReaderWriterEarth : public osgDB::ReaderWriter
                 {
                     OE_INFO << LC << "Detected a version 1.x earth file" << std::endl;
                     EarthFileSerializer1 ser;
-                    mapNode = ser.deserialize( conf, refURI );
+                    node = ser.deserialize( conf, refURI );
                 }
 
                 else
@@ -285,10 +286,11 @@ class ReaderWriterEarth : public osgDB::ReaderWriter
                     }
 
                     EarthFileSerializer2 ser;
-                    mapNode = ser.deserialize( conf, refURI );
+                    node = ser.deserialize( conf, refURI );
                 }
             }
 
+            MapNode* mapNode = MapNode::get(node.get());
             if (mapNode)
             {
                 // If the user passed in a cache object, apply it to the map now
@@ -300,7 +302,7 @@ class ReaderWriterEarth : public osgDB::ReaderWriter
                 }
             }
 
-            return ReadResult(mapNode);
+            return ReadResult(node.get());
         }
 };
 

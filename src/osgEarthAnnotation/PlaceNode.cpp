@@ -30,6 +30,7 @@
 #include <osgEarth/Registry>
 #include <osgEarth/ShaderGenerator>
 #include <osgEarth/GeoMath>
+#include <osgEarth/ScreenSpaceLayout>
 
 #include <osg/Depth>
 #include <osgText/Text>
@@ -124,20 +125,6 @@ PlaceNode::init()
     {
         _followFixedCourse = true;
         _labelRotationRad = osg::DegreesToRadians ( symbol->geographicCourse()->eval() );
-
-        double latRad;
-        double longRad;
-        GeoMath::destination( osg::DegreesToRadians( getPosition().y() ),
-                              osg::DegreesToRadians( getPosition().x() ),
-                              _labelRotationRad,
-                              2500.,
-                              latRad,
-                              longRad );
-        _geoPointProj.set ( osgEarth::SpatialReference::get("wgs84"),
-                                       osg::RadiansToDegrees(longRad),
-                                       osg::RadiansToDegrees(latRad),
-                                       0,
-                                       osgEarth::ALTMODE_ABSOLUTE );
     }
 
     osg::ref_ptr<const InstanceSymbol> instance = _style.get<InstanceSymbol>();
@@ -266,7 +253,9 @@ PlaceNode::init()
     }
 
     if ( text )
+    {
         _geode->addDrawable( text );
+    }
     
     osg::StateSet* stateSet = _geode->getOrCreateStateSet();
     stateSet->setAttributeAndModes( new osg::Depth(osg::Depth::ALWAYS, 0, 1, false), 1 );
@@ -294,6 +283,13 @@ PlaceNode::init()
 }
 
 void
+PlaceNode::dirty()
+{
+    GeoPositionNode::dirty();
+    updateLayoutData();
+}
+
+void
 PlaceNode::setPriority(float value)
 {
     GeoPositionNode::setPriority(value);
@@ -314,7 +310,32 @@ PlaceNode::updateLayoutData()
         _geode->getDrawable(i)->setUserData(_dataLayout.get());
     }
 
-    _dataLayout->setPriority(getPriority());
+    _dataLayout->setPriority(getPriority());    
+    
+    GeoPoint location = getPosition();
+    location.makeGeographic();
+    double latRad;
+    double longRad;
+    GeoMath::destination(osg::DegreesToRadians(location.y()),
+        osg::DegreesToRadians(location.x()),
+        _labelRotationRad,
+        2500.,
+        latRad,
+        longRad);
+
+    _geoPointProj.set(osgEarth::SpatialReference::get("wgs84"),
+        osg::RadiansToDegrees(longRad),
+        osg::RadiansToDegrees(latRad),
+        0,
+        osgEarth::ALTMODE_ABSOLUTE);
+
+    _geoPointLoc.set(osgEarth::SpatialReference::get("wgs84"),
+        //location.getSRS(),
+        location.x(),
+        location.y(),
+        0,
+        osgEarth::ALTMODE_ABSOLUTE);
+
     const TextSymbol* ts = getStyle().get<TextSymbol>();
     if (ts)
     {
@@ -400,13 +421,7 @@ PlaceNode::traverse(osg::NodeVisitor &nv)
             if (camera->getViewport())
                 matrix.postMult(camera->getViewport()->computeWindowMatrix());
 
-            GeoPoint pos( osgEarth::SpatialReference::get("wgs84"),
-                          getPosition().x(),
-                          getPosition().y(),
-                          0,
-                          osgEarth::ALTMODE_ABSOLUTE );
-
-            osg::Vec3d refOnWorld; pos.toWorld(refOnWorld);
+            osg::Vec3d refOnWorld; _geoPointLoc.toWorld(refOnWorld);
             osg::Vec3d projOnWorld; _geoPointProj.toWorld(projOnWorld);
             osg::Vec3d refOnScreen = refOnWorld * matrix;
             osg::Vec3d projOnScreen = projOnWorld * matrix;

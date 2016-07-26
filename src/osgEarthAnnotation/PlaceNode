@@ -120,6 +120,8 @@ namespace osgEarth { namespace Annotation
 
         virtual void traverse(osg::NodeVisitor &nv);
 
+        virtual void dirty();
+
     protected:
 
         virtual ~PlaceNode() { }
@@ -134,6 +136,7 @@ namespace osgEarth { namespace Annotation
         /** rotation of the label **/
         float                    _labelRotationRad;
         bool                     _followFixedCourse;
+        GeoPoint                 _geoPointLoc;
         GeoPoint                 _geoPointProj;
 
         void init();
