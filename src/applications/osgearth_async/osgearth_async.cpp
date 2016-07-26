@@ -277,6 +277,91 @@ public:
       osg::ref_ptr< LoadImageLayerOperation > _operation;
 };
 
+static unsigned int LAYER_INDEX = 0;
+
+class AsyncLayerSwitcherImage : public osg::Image
+{
+public:
+    AsyncLayerSwitcherImage(osg::Image* placeHolder, ImageLayerVector& layers, const TileKey& key):
+          _placeHolder(placeHolder),
+          _layers(layers),
+          _key(key),
+          _imageIndex(-1),
+          _requestIndex(-1)
+      {
+          assignToPlaceHolder();          
+      }
+
+      virtual bool requiresUpdateCall() const { return true; }
+
+      /** update method for osg::Image subclasses that update themselves during the update traversal.*/
+      virtual void update(osg::NodeVisitor* nv)
+      {
+          const osg::FrameStamp* fs = nv->getFrameStamp();
+
+          // We don't have an image or our existing image is dirty b/c the layer index changed.
+          if (!_image.valid() ||
+              _imageIndex != LAYER_INDEX) // Some criteria, this could be a callback or a separate function maybe.
+          {
+              // We don't have an operation or it's no longer valid.
+              if (!_operation.valid() ||
+                  _requestIndex != LAYER_INDEX)
+              {
+                  // Remove the existing operation if it's no longer valid.
+                  if (_operation.valid())
+                  {
+                      queue->remove( _operation.get() );
+                  }
+
+                  _operation = new LoadImageLayerOperation(_layers[LAYER_INDEX], _key);
+                  _requestIndex = LAYER_INDEX;
+                  queue->add( _operation );
+              }
+
+              // The request is done, so set the image.
+              if (_operation->_image.valid())
+              {
+                  _image = _operation->_image.get();
+                  assignToImage();
+                  // Record the image index as the request index.  We need this to determine if the image is valid or not.
+                  _imageIndex = _requestIndex;
+                  _operation = 0;
+              }
+          }
+      }
+
+      void assignToPlaceHolder()
+      {
+          if (_placeHolder.valid())
+          {
+              unsigned char* data = new unsigned char[ _placeHolder->getTotalSizeInBytes() ];
+              memcpy(data, _placeHolder->data(), _placeHolder->getTotalSizeInBytes());
+              Image::setImage(_placeHolder->s(), _placeHolder->t(), _placeHolder->r(), _placeHolder->getInternalTextureFormat(), _placeHolder->getPixelFormat(), _placeHolder->getDataType(), data, osg::Image::USE_NEW_DELETE, _placeHolder->getPacking());                            
+          }
+      }
+
+      void assignToImage()
+      {
+          if (_image.valid())
+          {
+              unsigned char* data = new unsigned char[ _image->getTotalSizeInBytes() ];
+              memcpy(data, _image->data(), _image->getTotalSizeInBytes());
+              Image::setImage(_image->s(), _image->t(), _image->r(), _image->getInternalTextureFormat(), _image->getPixelFormat(), _image->getDataType(), data, osg::Image::USE_NEW_DELETE, _image->getPacking());                            
+          }
+      }
+
+      osg::ref_ptr< osg::Image > _placeHolder;
+      osg::ref_ptr< osg::Image > _image;
+
+      ImageLayerVector& _layers;
+
+      int _imageIndex;
+      int _requestIndex;
+      
+      TileKey _key;
+      osg::ref_ptr< LoadImageLayerOperation > _operation;
+};
+
 class AsyncLambdaImage : public osg::Image
 {
 public:
@@ -293,9 +378,6 @@ public:
       /** update method for osg::Image subclasses that update themselves during the update traversal.*/
       virtual void update(osg::NodeVisitor* nv)
       {
-          //OpenThreads::ScopedLock<OpenThreads::Mutex> lock(_mutex);
-          //OE_NOTICE << "Update " << _url  << " time=" << fs->getSimulationTime() << std::endl;
-
           const osg::FrameStamp* fs = nv->getFrameStamp();
 
           if (!_image.valid())
@@ -352,6 +434,8 @@ public:
       osg::ref_ptr< LoadLambdaOperation > _operation;
       std::function< osg::Image*(const TileKey&) > _callback;
 };
+
+
 
 
 
@@ -424,11 +508,47 @@ osg::Node* makeLayerTile(ImageLayer* layer, const TileKey& key)
     texCoords->push_back(osg::Vec2f(1.0f, 1.0f));
     texCoords->push_back(osg::Vec2f(0.0f, 1.0f));
     geometry->setTexCoordArray(0, texCoords);
-    geometry->setTexCoordArray(1, texCoords);
 
     osg::Texture2D *texture = new osg::Texture2D;
     texture->setResizeNonPowerOfTwoHint(false);    
     texture->setImage(new AsyncLayerImage(getPlaceHolder(), layer, key));
+    geometry->getOrCreateStateSet()->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
+
+    geometry->setUseVertexBufferObjects(true);
+    geometry->setUseDisplayList(false);
+    geometry->addPrimitiveSet(new osg::DrawArrays(GL_QUADS, 0, verts->size()));
+
+    osg::Geode* geode =new osg::Geode;
+    geode->addDrawable( geometry );
+    return geode;
+}
+
+osg::Node* makeLayersTile(ImageLayerVector& layers, const TileKey& key)
+{
+    osg::Geometry* geometry = new osg::Geometry;
+
+    unsigned int numRows, numCols;
+    key.getProfile()->getNumTiles(key.getLevelOfDetail(), numCols, numRows);
+    unsigned int y  = numRows - key.getTileY() - 1;
+    
+
+    osg::Vec3Array* verts = new osg::Vec3Array;
+    verts->push_back(osg::Vec3(key.getTileX(), 0, y));
+    verts->push_back(osg::Vec3(key.getTileX() + 1.0, 0, y));
+    verts->push_back(osg::Vec3(key.getTileX() + 1.0, 0, y + 1.0));
+    verts->push_back(osg::Vec3(key.getTileX(), 0, y + 1.0));
+    geometry->setVertexArray(verts);
+
+    osg::Vec2Array* texCoords = new osg::Vec2Array;
+    texCoords->push_back(osg::Vec2f(0.0f, 0.0f));
+    texCoords->push_back(osg::Vec2f(1.0f, 0.0f));
+    texCoords->push_back(osg::Vec2f(1.0f, 1.0f));
+    texCoords->push_back(osg::Vec2f(0.0f, 1.0f));
+    geometry->setTexCoordArray(0, texCoords);
+
+    osg::Texture2D *texture = new osg::Texture2D;
+    texture->setResizeNonPowerOfTwoHint(false);    
+    texture->setImage(new AsyncLayerSwitcherImage(getPlaceHolder(), layers, key));
     geometry->getOrCreateStateSet()->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
 
     geometry->setUseVertexBufferObjects(true);
@@ -466,7 +586,6 @@ osg::Node* makeLambdaTile(std::function< osg::Image*(const TileKey&) > callback,
 
     osg::Texture2D *texture = new osg::Texture2D;
     texture->setResizeNonPowerOfTwoHint(false);    
-    //texture->setImage(new AsyncLayerImage(getPlaceHolder(), layer, key));
     texture->setImage(new AsyncLambdaImage(getPlaceHolder(), key, callback));
     geometry->getOrCreateStateSet()->setTextureAttributeAndModes(0, texture, osg::StateAttribute::ON);
 
@@ -502,13 +621,25 @@ main(int argc, char** argv)
     viewer.addEventHandler(new osgViewer::StatsHandler());
     viewer.addEventHandler(new osgGA::StateSetManipulator(viewer.getCamera()->getOrCreateStateSet()));
 
-    TMSOptions imagery;
-    imagery.url() = "http://readymap.org/readymap/tiles/1.0.0/22/";
-    osg::ref_ptr< ImageLayer > layer = new ImageLayer("ReadyMap imagery", imagery);
-    layer->open();
+    // ReadyMap Imagery
+    TMSOptions rmImagery;
+    rmImagery.url() = "http://readymap.org/readymap/tiles/1.0.0/22/";
+    osg::ref_ptr< ImageLayer > readymapLayer = new ImageLayer("ReadyMap imagery", rmImagery);
+    readymapLayer->open();
+
+    // OSM Imagery
+    TMSOptions osmImagery;
+    osmImagery.url() = "http://readymap.org/readymap/tiles/1.0.0/120/";
+    osg::ref_ptr< ImageLayer > osmLayer = new ImageLayer("OSM imagery", osmImagery);
+    osmLayer->open();
+
+    ImageLayerVector layers;
+    layers.push_back( readymapLayer.get() );
+    layers.push_back( osmLayer.get() );
+
 
     
-    unsigned int lod = 4;
+    unsigned int lod = 3;
     const Profile* profile = osgEarth::Registry::instance()->getGlobalGeodeticProfile();
     unsigned int wide, high;
     profile->getNumTiles(lod, wide, high);
@@ -518,13 +649,15 @@ main(int argc, char** argv)
         {
             TileKey key(lod, c, r, profile);
             //root->addChild(makeURLTile(key));
-
             //root->addChild(makeLayerTile(layer, key));
+            root->addChild(makeLayersTile(layers, key));
 
+            /*
             root->addChild(makeLambdaTile([layer](const TileKey& key) -> osg::Image* {
                 GeoImage img = layer->createImage(key);
                 return img.getImage();
             } , key));
+            */
         }
     }
     OE_NOTICE << "Added " << wide * high << " tiles" << std::endl;
@@ -550,6 +683,18 @@ main(int argc, char** argv)
     {
         viewer.frame();
         numFrames++;     
+        if (numFrames == 200)
+        {
+            // Selecting the layer index is an example of some external critera an application could use to 
+            // trigger an imagery change.
+            LAYER_INDEX++;
+            if (LAYER_INDEX >= layers.size())
+            {
+                LAYER_INDEX = 0;
+            }
+            OE_NOTICE << "Selecting layer " << LAYER_INDEX << ": " << layers[LAYER_INDEX]->getName() << std::endl;
+            numFrames = 0;
+        }
     }
     return 0;
 }
