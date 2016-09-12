@@ -189,13 +189,18 @@ public:
 
                 if ( masterLine || f->get()->style()->has<LineSymbol>() )
                 {
-                    Feature* newFeature = new Feature( *f->get() );
-                    if ( !newFeature->getGeometry()->isLinear() )
+                    for (unsigned int i = 0; i < f->get()->getGeometry()->getNumComponents(); i++)
                     {
-                        newFeature->setGeometry( newFeature->getGeometry()->cloneAs(Geometry::TYPE_RING) );
-                    }
-                    lines.push_back( newFeature );
-                    hasLine = true;
+                        Feature* newFeature = new Feature( *f->get() );
+                        
+                        if ( !newFeature->getGeometry()->isLinear() )
+                        {
+                            newFeature->setGeometry( newFeature->getGeometry()->cloneAs(Geometry::TYPE_RING) );                        
+                        }
+
+                        lines.push_back( newFeature );
+                        hasLine = true;
+                    }                    
                 }
 
                 // if there are no geometry symbols but there is a coverage symbol, default to polygons.
@@ -233,14 +238,18 @@ public:
             // downsample the line data so that it is no higher resolution than to image to which
             // we intend to rasterize it. If you don't do this, you run the risk of the buffer 
             // operation taking forever on very high-res input data.
+            /*
             if ( _options.optimizeLineSampling() == true )
             {
                 ResampleFilter resample;
                 resample.minLength() = osg::minimum( xres, yres );
                 context = resample.push( lines, context );
             }
+            */
 
+            
             // now run the buffer operation on all lines:
+            /*
             BufferFilter buffer;
             double lineWidth = 1.0;
             if ( masterLine )
@@ -295,7 +304,10 @@ public:
             }
 
             buffer.distance() = lineWidth * 0.5;   // since the distance is for one side
+            OE_NOTICE << "Buffering " << lines.size() << std::endl;
             buffer.push( lines, context );
+            OE_NOTICE << "After buffer " << lines.size() << std::endl;
+            */
         }
 
         // Transform the features into the map's SRS:
@@ -335,6 +347,8 @@ public:
         if (covsym && covsym->valueExpression().isSet())
             covValue = covsym->valueExpression().get();
 
+         OE_NOTICE << "Rendering " << polygons.size() << " polygons " << std::endl;
+
         // render the polygons
         for(FeatureList::iterator i = polygons.begin(); i != polygons.end(); i++)
         {
@@ -362,15 +376,23 @@ public:
             }
         }
 
+        OE_NOTICE << "Rendering " << lines.size() << " lines " << std::endl;
+
+        int lineNum = 0;
         // render the lines
         for(FeatureList::iterator i = lines.begin(); i != lines.end(); i++)
         {
             Feature*  feature  = i->get();
             Geometry* geometry = feature->getGeometry();
 
+
             osg::ref_ptr<Geometry> croppedGeometry;
+            //OE_NOTICE << "Cropping " << feature->getGeoJSON() << std::endl;
+            //croppedGeometry = geometry;
             if ( geometry->crop( cropPoly.get(), croppedGeometry ) )
             {
+                //OE_NOTICE << "Rendering " << feature->getGeoJSON() << std::endl;
+
                 const LineSymbol* line =
                     feature->style().isSet() && feature->style()->has<LineSymbol>() ? feature->style()->get<LineSymbol>() :
                     masterLine;
@@ -382,9 +404,17 @@ public:
                 }
                 else
                 {   osg::Vec4f color = line ? static_cast<osg::Vec4>(line->stroke()->color()) : osg::Vec4(1,1,1,1);
-                    rasterize(croppedGeometry.get(), color, frame, ras, rbuf);
+                    rasterizeLines(croppedGeometry.get(), 2.0,  color, frame, ras, rbuf);
                 }
+
+                OE_NOTICE << "Rendered " << lineNum++ << " of " << lines.size() << std::endl;
             }
+            /*
+            else
+            {
+                OE_NOTICE << "Failed to crop" << std::endl;
+            }
+            */            
         }
 
         return true;
@@ -414,6 +444,7 @@ public:
         unsigned a = (unsigned)(127.0f+(color.a()*255.0f)/2.0f); // scale alpha up
         agg::rgba8 fgColor = agg::rgba8( (unsigned)(color.r()*255.0f), (unsigned)(color.g()*255.0f), (unsigned)(color.b()*255.0f), a );
         
+        int count = 0;
         ConstGeometryIterator gi( geometry );
         while( gi.hasMore() )
         {
@@ -429,6 +460,7 @@ public:
                     ras.move_to_d( x0, y0 );
                 else
                     ras.line_to_d( x0, y0 );
+                count++;
             }
         }
         agg::renderer<agg::span_abgr32, agg::rgba8> ren(buffer);
@@ -436,6 +468,62 @@ public:
 
         ras.reset();
     }
+
+    void draw_line(agg::rasterizer& ras, double x1, double y1, double x2, double y2, double width) {
+
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+        double d = sqrt(dx*dx + dy*dy);
+
+        dx = width * (y2 - y1) / d;
+        dy = width * (x2 - x1) / d;
+
+        ras.move_to_d(x1 - dx,  y1 + dy);
+        ras.line_to_d(x2 - dx,  y2 + dy);
+        ras.line_to_d(x2 + dx,  y2 - dy);
+        ras.line_to_d(x1 + dx,  y1 - dy);
+    }
+
+    void rasterizeLines(const Geometry* geometry, double width, const osg::Vec4& color, RenderFrame& frame, 
+                       agg::rasterizer& ras, agg::rendering_buffer& buffer)
+    {
+        unsigned a = (unsigned)(127.0f+(color.a()*255.0f)/2.0f); // scale alpha up
+        agg::rgba8 fgColor = agg::rgba8( (unsigned)(color.r()*255.0f), (unsigned)(color.g()*255.0f), (unsigned)(color.b()*255.0f), a );
+        
+        int count = 0;
+        ConstGeometryIterator gi( geometry );
+        while( gi.hasMore() )
+        {
+            const Geometry* g = gi.next();
+
+            double prevX = 0; 
+            double prevY = 0;
+
+            for( Geometry::const_iterator p = g->begin(); p != g->end(); p++ )
+            {
+                const osg::Vec3d& p0 = *p;
+
+                double x0 = frame.xf*(p0.x()-frame.xmin);
+                double y0 = frame.yf*(p0.y()-frame.ymin);
+
+                if ( p != g->begin() )
+                {
+                    draw_line(ras, prevX, prevY, x0, y0, width);
+                }                    
+
+                prevX = x0;
+                prevY = y0;
+
+                count++;
+            }
+        }
+        agg::renderer<agg::span_abgr32, agg::rgba8> ren(buffer);
+        ras.render(ren, fgColor);
+
+        ras.reset();
+    }
+
+
 
 
     void rasterizeCoverage(const Geometry* geometry, float value, RenderFrame& frame, 
