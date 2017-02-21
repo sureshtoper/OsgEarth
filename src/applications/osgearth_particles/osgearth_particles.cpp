@@ -96,12 +96,12 @@ osg::Texture2D* createPositionTexture()
         *ptr++ = x;
         *ptr++ = y;
         *ptr++ = z;
-        // velocity
-        *ptr++ = random.next() * 5.0;
+        // Random life
+        *ptr++ = random.next();
     }
     
     osg::Texture2D* tex = new osg::Texture2D( positionImage );
-    tex->setInternalFormatMode(osg::Texture::InternalFormatMode::USE_IMAGE_DATA_FORMAT);
+    tex->setInternalFormatMode(osg::Texture::USE_IMAGE_DATA_FORMAT);
     tex->setFilter( osg::Texture2D::MIN_FILTER, osg::Texture2D::NEAREST );
     tex->setFilter( osg::Texture2D::MAG_FILTER, osg::Texture2D::NEAREST );
     return tex;      
@@ -123,20 +123,21 @@ osg::Texture2D* createDirectionTexture()
         
     for (unsigned int i = 0; i < TEXTURE_DIM * TEXTURE_DIM; i++)
     {
+        // Initial velocity
+        float velocity = random.next() * 50.0;
+
         // Circle
         //float x = -0.5 + random.next();
         //float y = -0.5 + random.next();
         //float z = -0.5 + random.next();   
-       
+      
         /*
         float x = random.next();
         float y = random.next();
         float z = random.next();   
         */
 
-        // Initial velocity
-        float velocity = random.next();
-
+       
         float theta = minTheta + (maxTheta - minTheta) * random.next();
         float phi = minPhi + (maxPhi - minPhi) * random.next();
 
@@ -146,9 +147,9 @@ osg::Texture2D* createDirectionTexture()
 
         // Initial velocity
         float acceleration = random.next() * 100.0;        
-        osg::Vec3 dir(x, y, z);
-        dir.normalize();
-        
+
+        osg::Vec3 dir(x, y, z);     
+
         *ptr++ = dir.x();
         *ptr++ = dir.y();
         *ptr++ = dir.z();
@@ -156,7 +157,7 @@ osg::Texture2D* createDirectionTexture()
     }
     
     osg::Texture2D* tex = new osg::Texture2D( positionDirection );
-    tex->setInternalFormatMode(osg::Texture::InternalFormatMode::USE_IMAGE_DATA_FORMAT);
+    tex->setInternalFormatMode(osg::Texture::USE_IMAGE_DATA_FORMAT);
     tex->setFilter( osg::Texture2D::MIN_FILTER, osg::Texture2D::NEAREST );
     tex->setFilter( osg::Texture2D::MAG_FILTER, osg::Texture2D::NEAREST );
     return tex;      
@@ -191,36 +192,60 @@ std::string computeVert =
 
 std::string computeFrag =
 "uniform sampler2D texturePosition; \n"
-"uniform sampler2D textureDirection; \n"
+"uniform sampler2D textureVelocity; \n"
 "uniform float osg_DeltaSimulationTime; \n"
+"uniform float osg_SimulationTime; \n"
 "uniform vec2 resolution;\n"
+
+// Generate a pseudo-random value in the specified range:
+"float\n"
+"oe_random(float minValue, float maxValue, vec2 co)\n"
+"{\n"
+"    float t = fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);\n"
+"    return minValue + t*(maxValue-minValue);\n"
+"}\n"
+
 
 "void main() \n"
 "{ \n"
 "   vec2 uv = gl_FragCoord.xy / resolution.xy;\n"
 
 "   vec4 positionInfo = texture2D( texturePosition, uv );\n"    
-// w position is velocity
-"   float velocity = positionInfo.w;\n"
+"   vec4 velocityInfo = texture2D( textureVelocity, uv );\n"
 
-// w position is acceleration
-"   vec4 directionInfo = texture2D( textureDirection, uv );\n"
-"   float acceleration = directionInfo.w;\n"
+"   vec3 position = positionInfo.xyz;\n"
+"   float life = positionInfo.w;\n"
+"   vec3 velocity = velocityInfo.xyz;\n"
 
-"   vec3 position = positionInfo.xyz + directionInfo.xyz * velocity * osg_DeltaSimulationTime;\n"
+// Apply various forces to compute a new velocity
+
+// Gravity
+"   velocity = velocity + vec3(0.0, 0.0, -9.8) * osg_DeltaSimulationTime;\n"
+
+// Compute the new position based on the velocity
+"   position = position + velocity * osg_DeltaSimulationTime;\n"
 
 // Compute the new velocity based on the acceleration
-"  velocity = velocity + acceleration * osg_DeltaSimulationTime;\n"
+//"  velocity = velocity + acceleration * osg_DeltaSimulationTime;\n"
 
-/*
-"   float life = positionInfo.w;\n"
-"   life -= osg_DeltaSimulationTime / 1.0f;\n"
-"   if (life < 0.0) life = 1.0;\n"
-*/
+"   life -= osg_DeltaSimulationTime / 20.0f;\n"
+// Reset particle
+"   if (life < 0.0) {\n"
+"       life = oe_random(0.0, 1.0, vec2(position.x, position.y));\n"
+"       float initialVelocity = oe_random(50.0, 250.0, vec2(position.y, position.z));\n"
+"       float x = oe_random(-0.5, 0.5, vec2(position.x, position.y));\n"
+"       float y = oe_random(-0.5, 0.5, vec2(position.y, position.x));\n"
+"       float z = 1.0;//oe_random(-0.5, 0.5, vec2(position.x, position.z));\n"
+"       velocity = initialVelocity * normalize(vec3(x, y, z));\n"
+"       position = vec3(0.0, 0.0, 0.0);\n"
+"   }\n"
+
 
 //  Write out the new position
 //"   gl_FragColor = vec4(position, life);\n"
-"   gl_FragColor = vec4(position, velocity);\n"
+//"   gl_FragColor = vec4(position, velocity);\n"
+"     gl_FragData[0] = vec4(position, life);\n"
+"     gl_FragData[1] = vec4(velocity, 1.0);\n"
 "} \n";
 
 
@@ -232,9 +257,10 @@ public:
     ComputeNode():
       _size(TEXTURE_DIM)
     {
-        _input  = createPositionTexture();
-        _output = createPositionTexture();
-        _direction = createDirectionTexture();
+        _inputPosition  = createPositionTexture();
+        _outputPosition = createPositionTexture();
+        _velocityInput = createDirectionTexture();
+        _velocityOutput = createDirectionTexture();
 
         buildCamera();
     }
@@ -247,14 +273,14 @@ public:
         osg::StateSet* ss = new osg::StateSet;    
         ss->setAttributeAndModes(program);
 
-        ss->addUniform(new osg::Uniform( "texturePosition", 0 ));
-        ss->addUniform(new osg::Uniform( "textureDirection", 1 ));
+        ss->addUniform(new osg::Uniform("texturePosition", 0 ));
+        ss->addUniform(new osg::Uniform("textureVelocity", 1 ));
 
         ss->addUniform(new osg::Uniform( "resolution", osg::Vec2f(_size, _size)));
 
         // Use the input texture as texture 0
-        ss->setTextureAttributeAndModes(0, _input.get(), osg::StateAttribute::ON);
-        ss->setTextureAttributeAndModes(1, _direction.get(), osg::StateAttribute::ON);
+        ss->setTextureAttributeAndModes(0, _inputPosition.get(), osg::StateAttribute::ON);
+        ss->setTextureAttributeAndModes(1, _velocityInput.get(), osg::StateAttribute::ON);
 
         return ss;
     }
@@ -297,27 +323,102 @@ public:
             removeChild(_camera.get());
         }
         _camera = createRTTCamera();
-        _camera->attach( osg::Camera::COLOR_BUFFER, _output, 0, 0, false );                
+        // Use the color buffer.
+        //_camera->attach( osg::Camera::COLOR_BUFFER, _outputPosition, 0, 0, false );                
+        _camera->attach( osg::Camera::BufferComponent(osg::Camera::COLOR_BUFFER0), _outputPosition);                
+        _camera->attach( osg::Camera::BufferComponent(osg::Camera::COLOR_BUFFER1), _velocityOutput);                
         addChild(_camera.get());
     }
 
     void swap()
     {
-        osg::ref_ptr< osg::Texture2D > tmp = _input.get();
-        _input = _output.get();
-        _output = tmp.get();
+        // Swap the positions
+        osg::ref_ptr< osg::Texture2D > tmp = _inputPosition.get();
+        _inputPosition = _outputPosition.get();
+        _outputPosition = tmp.get();
+
+        // Swap the velocities
+        tmp = _velocityInput.get();
+        _velocityInput = _velocityOutput.get();
+        _velocityOutput = tmp.get();
 
         buildCamera();
     }
 
-    osg::ref_ptr< osg::Texture2D > _input;
-    osg::ref_ptr< osg::Texture2D > _output;
-    osg::ref_ptr< osg::Texture2D > _direction;
+    osg::ref_ptr< osg::Texture2D > _inputPosition;
+    osg::ref_ptr< osg::Texture2D > _outputPosition;
+    osg::ref_ptr< osg::Texture2D > _velocityInput;
+    osg::ref_ptr< osg::Texture2D > _velocityOutput;
     osg::ref_ptr< osg::Camera > _camera;
     osg::ref_ptr<osg::Node> _quad;
     
     unsigned int _size;
 };
+
+
+osg::Node* createBase(const osg::Vec3& center,float radius)
+{
+    int numTilesX = 10;
+    int numTilesY = 10;
+
+    float width = 2*radius;
+    float height = 2*radius;
+
+    osg::Vec3 v000(center - osg::Vec3(width*0.5f,height*0.5f,0.0f));
+    osg::Vec3 dx(osg::Vec3(width/((float)numTilesX),0.0,0.0f));
+    osg::Vec3 dy(osg::Vec3(0.0f,height/((float)numTilesY),0.0f));
+
+    // fill in vertices for grid, note numTilesX+1 * numTilesY+1...
+    osg::Vec3Array* coords = new osg::Vec3Array;
+    int iy;
+    for(iy=0;iy<=numTilesY;++iy)
+    {
+        for(int ix=0;ix<=numTilesX;++ix)
+        {
+            coords->push_back(v000+dx*(float)ix+dy*(float)iy);
+        }
+    }
+
+    //Just two colours - black and white.
+    osg::Vec4Array* colors = new osg::Vec4Array;
+    colors->push_back(osg::Vec4(1.0f,1.0f,1.0f,1.0f)); // white
+    colors->push_back(osg::Vec4(0.0f,0.0f,0.0f,1.0f)); // black
+
+    osg::ref_ptr<osg::DrawElementsUShort> whitePrimitives = new osg::DrawElementsUShort(GL_QUADS);
+    osg::ref_ptr<osg::DrawElementsUShort> blackPrimitives = new osg::DrawElementsUShort(GL_QUADS);
+
+    int numIndicesPerRow=numTilesX+1;
+    for(iy=0;iy<numTilesY;++iy)
+    {
+        for(int ix=0;ix<numTilesX;++ix)
+        {
+            osg::DrawElementsUShort* primitives = ((iy+ix)%2==0) ? whitePrimitives.get() : blackPrimitives.get();
+            primitives->push_back(ix    +(iy+1)*numIndicesPerRow);
+            primitives->push_back(ix    +iy*numIndicesPerRow);
+            primitives->push_back((ix+1)+iy*numIndicesPerRow);
+            primitives->push_back((ix+1)+(iy+1)*numIndicesPerRow);
+        }
+    }
+
+    // set up a single normal
+    osg::Vec3Array* normals = new osg::Vec3Array;
+    normals->push_back(osg::Vec3(0.0f,0.0f,1.0f));
+
+    osg::Geometry* geom = new osg::Geometry;
+    geom->setVertexArray(coords);
+
+    geom->setColorArray(colors, osg::Array::BIND_PER_PRIMITIVE_SET);
+
+    geom->setNormalArray(normals, osg::Array::BIND_OVERALL);
+
+    geom->addPrimitiveSet(whitePrimitives.get());
+    geom->addPrimitiveSet(blackPrimitives.get());
+
+    osg::Geode* geode = new osg::Geode;
+    geode->addDrawable(geom);
+
+    return geode;
+}
 
 
 osg::StateSet*
@@ -349,15 +450,15 @@ createStateSet()
             
             // Use the (scaled) tex coord to translate the position of the vertices.
             "vec4 posInfo = texture2D( positionSampler, tC );\n"
+            "float life = posInfo.w;\n"
             "vec4 pos = gl_Vertex + vec4(posInfo.xyz, 0.0);\n"
-            "float velocity = posInfo.w;\n"
 
             // Always red
             //"gl_FrontColor =  vec4(1.0, 0.0, 0.0, 1.0);\n"
             //"vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), clamp(velocity / 200.0, 0.0, 1.0));\n"
-            "float alpha = clamp(length(pos.xyz) / 10000.0, 0.4, 1.0);\n"
+            "float alpha = clamp(life, 0.0, 1.0);\n"
             "vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), alpha);\n"
-            "gl_FrontColor =  vec4(color, 1.0 - alpha);\n"
+            "gl_FrontColor =  vec4(color, alpha);\n"
 
 
             //"gl_Position = gl_ProjectionMatrix * (pos + vec4(modelView[3].xyz, 0));\n"
@@ -396,6 +497,8 @@ int main( int argc, char **argv )
 
     osg::Group* root = new osg::Group;
 
+    root->addChild(createBase(osg::Vec3(0,0,-1000.0), 5000.0));
+
     // Add a compute node.
     ComputeNode* computeNode = new ComputeNode();
     root->addChild(computeNode);
@@ -414,12 +517,13 @@ int main( int argc, char **argv )
     geode->addDrawable( geom.get() );
     geom->setCullingActive(false);
     geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
+    geode->getOrCreateStateSet()->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
     
     // Create a StateSet to render the instanced Geometry.
     osg::ref_ptr< osg::StateSet > ss = createStateSet();
 
     // Attatch the output of the compute node as the texture to feed the positions on the instanced geometry.
-    ss->setTextureAttributeAndModes(0, computeNode->_output.get(), osg::StateAttribute::ON);
+    ss->setTextureAttributeAndModes(0, computeNode->_outputPosition.get(), osg::StateAttribute::ON);
 
     geode->setStateSet( ss.get() );  
 
@@ -434,14 +538,6 @@ int main( int argc, char **argv )
 
     viewer.setCameraManipulator(new osgGA::TrackballManipulator());
 
-    float staticVelocity = 100.0f;
-    float velocity = 1.0f;
-    float acceleration = 10.0f;
-
-    /*
-    osg::Uniform* velocityUniform = new osg::Uniform("velocity", velocity);
-    root->getOrCreateStateSet()->addUniform(velocityUniform);
-    */
     
     double prevSimulationTime = viewer.getFrameStamp()->getSimulationTime();
 
@@ -453,23 +549,8 @@ int main( int argc, char **argv )
 
         computeNode->swap();
         // Attatch the output of the compute node as the texture to feed the positions on the instanced geometry.
-        ss->setTextureAttributeAndModes(0, computeNode->_output.get(), osg::StateAttribute::ON);
-
-        double simulationTime = viewer.getFrameStamp()->getSimulationTime();
-        float deltaSimTime = (simulationTime - prevSimulationTime);
-
-        /*
-        velocity += acceleration * deltaSimTime;
-        velocityUniform->set(velocity);
-        */
-
-        //acceleration += (-0.5 + rand.next());
-        
-        //float mult = fmodf(simulationTime, 10.0);        
-        //velocity += 10.0 * sinf(mult * osg::PI * 2.0);        
-        //velocityUniform->set(velocity);
-
-        prevSimulationTime = simulationTime;                
+        ss->setTextureAttributeAndModes(0, computeNode->_outputPosition.get(), osg::StateAttribute::ON);
     }
 }
+
 
