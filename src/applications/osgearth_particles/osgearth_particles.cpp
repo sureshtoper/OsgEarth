@@ -197,6 +197,8 @@ std::string computeFrag =
 "uniform float osg_SimulationTime; \n"
 "uniform vec2 resolution;\n"
 
+"uniform vec3 gravity;\n"
+
 // Generate a pseudo-random value in the specified range:
 "float\n"
 "oe_random(float minValue, float maxValue, vec2 co)\n"
@@ -220,7 +222,8 @@ std::string computeFrag =
 // Apply various forces to compute a new velocity
 
 // Gravity
-"   velocity = velocity + vec3(0.0, 0.0, -9.8) * osg_DeltaSimulationTime;\n"
+//"   velocity = velocity + vec3(0.0, 0.0, -9.8) * osg_DeltaSimulationTime;\n"
+"   velocity = velocity + gravity * osg_DeltaSimulationTime;\n"
 
 // Compute the new position based on the velocity
 "   position = position + velocity * osg_DeltaSimulationTime;\n"
@@ -491,6 +494,42 @@ createStateSet()
 }
 
 
+struct GravityHandler : public osgGA::GUIEventHandler
+{
+    GravityHandler(osg::Uniform* uniform):
+_uniform(uniform)
+    {
+    }
+
+    bool handle(const osgGA::GUIEventAdapter& ea, osgGA::GUIActionAdapter& aa)
+    {
+        if (ea.getEventType() == ea.KEYDOWN)
+        {
+            if (ea.getKey() == '+')
+            {              
+                osg::Vec3 value;
+                _uniform->get(value);
+                value += osg::Vec3(0,0,1);
+                _uniform->set(value);
+                return true;
+            }
+            else if (ea.getKey() == '-')
+            {              
+                osg::Vec3 value;
+                _uniform->get(value);
+                value -= osg::Vec3(0,0,1);
+                _uniform->set(value);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    osg::Uniform* _uniform;
+};
+
+
+
 int main( int argc, char **argv )
 {
     osg::ArgumentParser arguments(&argc, argv);
@@ -537,6 +576,11 @@ int main( int argc, char **argv )
     viewer.setSceneData( root );
 
     viewer.setCameraManipulator(new osgGA::TrackballManipulator());
+
+    osg::Uniform* gravity = new osg::Uniform("gravity", osg::Vec3(0.0, 0.0, -9.8));
+    computeNode->getOrCreateStateSet()->addUniform(gravity);
+
+    viewer.addEventHandler(new GravityHandler(gravity));
 
     
     double prevSimulationTime = viewer.getFrameStamp()->getSimulationTime();
