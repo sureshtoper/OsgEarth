@@ -70,6 +70,7 @@ IF(BUILD_OSGEARTH_EXAMPLES)
     ENDIF()
 
     ADD_SUBDIRECTORY(osgearth_measure)
+    ADD_SUBDIRECTORY(osgearth_particles)
     ADD_SUBDIRECTORY(osgearth_controls)
     ADD_SUBDIRECTORY(osgearth_shadercomp)
     ADD_SUBDIRECTORY(osgearth_tilesource)
