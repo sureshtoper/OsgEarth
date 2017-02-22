@@ -54,6 +54,8 @@ _message(message)
 void
 createDAIGeometry( osg::Geometry& geom, int nInstances=1 )
 {
+    // Points
+    /*
     osg::Vec3Array* v = new osg::Vec3Array;
     v->resize( 1 );
     geom.setVertexArray( v );
@@ -63,8 +65,44 @@ createDAIGeometry( osg::Geometry& geom, int nInstances=1 )
 
     // Use the DrawArraysInstanced PrimitiveSet and tell it to draw 1024 instances.
     geom.addPrimitiveSet( new osg::DrawArrays( GL_POINTS, 0, 1, nInstances ) );
+    */
+
+    // Triangles
+    float angler = osg::PI * 2.0 / 3.0f;;
     
-    geom.setInitialBound(osg::BoundingBox(osg::Vec3(-5000.0, -5000.0, -5000.0), osg::Vec3(5000.0, 5000.0, 5000.0)));
+    osg::Vec3Array* v = new osg::Vec3Array;
+    v->resize( 3 );
+    geom.setVertexArray( v );
+    /*
+    TriVertices[0] =        float3(Math.Sin(angler*2 + Math.PIf), Math.Cos(angler*2 + Math.PIf), 0);
+    TriVertices[1] =        float3(Math.Sin(angler + Math.PIf), Math.Cos(angler + Math.PIf), 0);
+    TriVertices[2] =        float3(Math.Sin(angler*3 + Math.PIf), Math.Cos(angler*3 + Math.PIf), 0);
+
+    TriVerticesFlip[0] =    float3(Math.Sin(angler*2), Math.Cos(angler*2), 0);
+    TriVerticesFlip[1] =    float3(Math.Sin(angler), Math.Cos(angler), 0);
+    TriVerticesFlip[2] =    float3(Math.Sin(angler*3), Math.Cos(angler*3), 0);
+    */
+
+    // Triangles
+    (*v)[0] = osg::Vec3(sinf(angler*2.0 + osg::PI), cosf(angler*2.0f + osg::PI), 0.0f);
+    (*v)[1] = osg::Vec3(sinf(angler + osg::PI), cosf(angler + osg::PI), 0.0f);
+    (*v)[2] = osg::Vec3(sinf(angler*3.0 + osg::PI), cosf(angler*3.0f + osg::PI), 0.0f);
+
+    osg::Vec3Array* vFlipped = new osg::Vec3Array;
+    vFlipped->resize( 3 );
+    geom.setVertexAttribArray( osg::Drawable::ATTRIBUTE_6, vFlipped );
+    geom.setVertexAttribBinding( osg::Drawable::ATTRIBUTE_6, osg::Geometry::BIND_PER_VERTEX );
+    geom.setVertexAttribNormalize( osg::Drawable::ATTRIBUTE_6, false );
+
+    (*vFlipped)[0] = osg::Vec3(sinf(angler*2.0f), cosf(angler*2.0f), 0.0f);
+    (*vFlipped)[1] = osg::Vec3(sinf(angler), cosf(angler), 0.0f);
+    (*vFlipped)[2] = osg::Vec3(sinf(angler*3.0f), cosf(angler*3.0f), 0.0f);
+
+    // Use the DrawArraysInstanced PrimitiveSet and tell it to draw SOME INSTANCES instances.
+    geom.addPrimitiveSet( new osg::DrawArrays( GL_TRIANGLES, 0, 3, nInstances ) );
+    
+    float radius = 1000.0;
+    geom.setInitialBound(osg::BoundingBox(osg::Vec3(-radius, -radius, -radius), osg::Vec3(radius, radius, radius)));
 
 }
 
@@ -124,7 +162,7 @@ osg::Texture2D* createDirectionTexture()
     for (unsigned int i = 0; i < TEXTURE_DIM * TEXTURE_DIM; i++)
     {
         // Initial velocity
-        float velocity = random.next() * 50.0;
+        float velocity = random.next() * 2.0;
 
         // Circle
         //float x = -0.5 + random.next();
@@ -146,7 +184,7 @@ osg::Texture2D* createDirectionTexture()
         float z = velocity * cosf(theta);
 
         // Initial velocity
-        float acceleration = random.next() * 100.0;        
+        float acceleration = random.next() * 2.0;        
 
         osg::Vec3 dir(x, y, z);     
 
@@ -196,6 +234,7 @@ std::string computeFrag =
 "uniform float osg_DeltaSimulationTime; \n"
 "uniform float osg_SimulationTime; \n"
 "uniform vec2 resolution;\n"
+"uniform float dieSpeed;\n"
 
 "uniform vec3 gravity;\n"
 
@@ -231,16 +270,19 @@ std::string computeFrag =
 // Compute the new velocity based on the acceleration
 //"  velocity = velocity + acceleration * osg_DeltaSimulationTime;\n"
 
-"   life -= osg_DeltaSimulationTime / 20.0f;\n"
+"   life -= (osg_DeltaSimulationTime / dieSpeed);\n"
 // Reset particle
 "   if (life < 0.0) {\n"
 "       life = oe_random(0.0, 1.0, vec2(position.x, position.y));\n"
-"       float initialVelocity = oe_random(50.0, 250.0, vec2(position.y, position.z));\n"
-"       float x = oe_random(-0.5, 0.5, vec2(position.x, position.y));\n"
-"       float y = oe_random(-0.5, 0.5, vec2(position.y, position.x));\n"
-"       float z = 1.0;//oe_random(-0.5, 0.5, vec2(position.x, position.z));\n"
+"       float initialVelocity = oe_random(0.5, 10.0, vec2(position.y, position.z));\n"
+
+"       float x = oe_random(-10.0, 10.0, vec2(position.z, position.y));\n"
+"       float y = oe_random(-10.0, 10.0, vec2(position.y, position.x));\n"
+"       float z = oe_random(0, 2.0, vec2(osg_SimulationTime, position.z));\n"
 "       velocity = initialVelocity * normalize(vec3(x, y, z));\n"
-"       position = vec3(0.0, 0.0, 0.0);\n"
+//"       velocity = vec3(0.0, 0.0, 0.0);\n"
+//"       position = vec3(0.0, 0.0, 0.0);\n"
+"       position = vec3(x, y, z);\n"
 "   }\n"
 
 
@@ -437,6 +479,8 @@ createStateSet()
         "uniform float osg_SimulationTime; \n"
         "uniform mat4 osg_ViewMatrixInverse;\n"
         "uniform mat4 osg_ViewMatrix;\n"
+        "in vec3 positionFlip;\n"
+        "uniform float flipRatio;\n"
 
         "uniform vec2 resolution;\n"
 
@@ -445,7 +489,7 @@ createStateSet()
             "mat4 modelView = gl_ModelViewMatrix;\n"
 
             "mat4 modelMatrix = gl_ModelViewMatrix * osg_ViewMatrixInverse;"
-
+           
             // Using the instance ID, generate "texture coords" for this instance.
             "vec2 tC; \n"
             "float r = float(gl_InstanceID) / resolution.x; \n"
@@ -454,19 +498,29 @@ createStateSet()
             // Use the (scaled) tex coord to translate the position of the vertices.
             "vec4 posInfo = texture2D( positionSampler, tC );\n"
             "float life = posInfo.w;\n"
-            "vec4 pos = gl_Vertex + vec4(posInfo.xyz, 0.0);\n"
 
-            // Always red
-            //"gl_FrontColor =  vec4(1.0, 0.0, 0.0, 1.0);\n"
-            //"vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), clamp(velocity / 200.0, 0.0, 1.0));\n"
+            "vec3 pos = posInfo.xyz;\n"
+
+            "vec4 worldPosition = modelMatrix * vec4( pos, 1.0 );\n"
+            "vec4 mvPosition = osg_ViewMatrix * worldPosition;\n"            
+
+            //"vec4 pos = gl_Vertex + vec4(posInfo.xyz, 0.0);\n"
+            
+            "float scale = 0.5 * smoothstep(0.0, 1.0, life);\n"
+
+            // With flipping.
+            "mvPosition += vec4((gl_Vertex + (positionFlip - gl_Vertex) * flipRatio) * scale, 0.0);\n"       
+            //"mvPosition += (gl_Vertex * scale);\n"
+            //"mvPosition += (vec4(positionFlip, 0.0) * scale);\n"
+
+            "gl_Position = gl_ProjectionMatrix * mvPosition;\n"
+
             "float alpha = clamp(life, 0.0, 1.0);\n"
-            "vec3 color = mix(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), alpha);\n"
-            "gl_FrontColor =  vec4(color, alpha);\n"
-
-
+            "vec3 color = mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.5, 1.0), alpha);\n"
+            "gl_FrontColor =  vec4(color, 1.0);\n"
+            //"gl_FrontColor =  vec4(normalize(mvPosition.xyz), 1.0);\n"
             //"gl_Position = gl_ProjectionMatrix * (pos + vec4(modelView[3].xyz, 0));\n"
-            "gl_Position = gl_ModelViewProjectionMatrix * pos; \n"
-            //"gl_Position = gl_ProjectionMatrix * modelView * pos;\n"
+            //"gl_Position = gl_ModelViewProjectionMatrix * pos; \n"
         "} \n";
 
     std::string fragSource =
@@ -480,6 +534,7 @@ createStateSet()
     osg::ref_ptr< osg::Program > program = new osg::Program();
     program->addShader( new osg::Shader(osg::Shader::VERTEX, vertexSource ));
     program->addShader(new osg::Shader(osg::Shader::FRAGMENT, fragSource));
+    program->addBindAttribLocation( "positionFlip",  osg::Drawable::ATTRIBUTE_6 );
 
     ss->setAttribute( program.get(),
         osg::StateAttribute::ON | osg::StateAttribute::PROTECTED );    
@@ -536,7 +591,7 @@ int main( int argc, char **argv )
 
     osg::Group* root = new osg::Group;
 
-    root->addChild(createBase(osg::Vec3(0,0,-1000.0), 5000.0));
+    root->addChild(createBase(osg::Vec3(0,0,-100.0), 500.0));
 
     // Add a compute node.
     ComputeNode* computeNode = new ComputeNode();
@@ -555,8 +610,7 @@ int main( int argc, char **argv )
     createDAIGeometry( *geom, TEXTURE_DIM*TEXTURE_DIM );
     geode->addDrawable( geom.get() );
     geom->setCullingActive(false);
-    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);
-    geode->getOrCreateStateSet()->setMode(GL_DEPTH_TEST, osg::StateAttribute::OFF);
+    geode->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::OFF);    
     
     // Create a StateSet to render the instanced Geometry.
     osg::ref_ptr< osg::StateSet > ss = createStateSet();
@@ -566,8 +620,8 @@ int main( int argc, char **argv )
 
     geode->setStateSet( ss.get() );  
 
-    geode->getOrCreateStateSet()->setAttributeAndModes(new osg::Point(2.0));
-    geode->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON);
+    //geode->getOrCreateStateSet()->setAttributeAndModes(new osg::Point(2.0));
+    //geode->getOrCreateStateSet()->setMode(GL_BLEND, osg::StateAttribute::ON);
 
     root->addChild(geode);
 
@@ -575,17 +629,36 @@ int main( int argc, char **argv )
     viewer.addEventHandler(new osgViewer::StatsHandler);
     viewer.setSceneData( root );
 
+    // disable the small-feature culling
+    viewer.getCamera()->setSmallFeatureCullingPixelSize(-1.0f);
+
+    // set a near/far ratio that is smaller than the default. This allows us to get
+    // closer to the ground without near clipping. If you need more, use --logdepth
+    viewer.getCamera()->setNearFarRatio(0.0001);    
+    
     viewer.setCameraManipulator(new osgGA::TrackballManipulator());
 
     osg::Uniform* gravity = new osg::Uniform("gravity", osg::Vec3(0.0, 0.0, -9.8));
     computeNode->getOrCreateStateSet()->addUniform(gravity);
-
     viewer.addEventHandler(new GravityHandler(gravity));
 
     
     double prevSimulationTime = viewer.getFrameStamp()->getSimulationTime();
 
     osgEarth::Random rand;
+
+    /*
+    viewer.getCamera()->setComputeNearFarMode( osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR );
+    double fov, ar, n, f;
+    viewer.getCamera()->getProjectionMatrixAsPerspective(fov, ar, n, f);
+    viewer.getCamera()->setProjectionMatrixAsPerspective(fov, ar, 0.1, 50000.0f); 
+    */
+
+    osg::Uniform* flipRatio = new osg::Uniform("flipRatio", 0.0f);
+    ss->addUniform(flipRatio);
+
+    osg::Uniform* dieSpeed = new osg::Uniform("dieSpeed", 10.0f);
+    computeNode->getStateSet()->addUniform(dieSpeed);
     
     while (!viewer.done())
     {
@@ -594,6 +667,12 @@ int main( int argc, char **argv )
         computeNode->swap();
         // Attatch the output of the compute node as the texture to feed the positions on the instanced geometry.
         ss->setTextureAttributeAndModes(0, computeNode->_outputPosition.get(), osg::StateAttribute::ON);
+
+        // Flip the flip ratio
+        float r;
+        flipRatio->get(r);
+        r = (r == 0.0f ? 1.0f: 0.0f);
+        flipRatio->set(r);
     }
 }
 
