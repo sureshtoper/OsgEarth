@@ -25,6 +25,7 @@
 #include <osg/Geometry>
 #include <osg/Texture2D>
 #include <osgEarth/Random>
+#include <osgEarthUtil/Controls>
 #include <osgViewer/ViewerEventHandlers>
 #include <osgGA/TrackballManipulator>
 #include <osg/Point>
@@ -34,6 +35,8 @@
 #include <iostream>
 
 #define TEXTURE_DIM 2048
+
+using namespace osgEarth::Util::Controls;
 
 
 struct NotifyCameraPostDrawCallback : public osg::Camera::DrawCallback
@@ -577,6 +580,77 @@ _uniform(uniform)
     osg::Uniform* _uniform;
 };
 
+struct SetGravity: public ControlEventHandler
+{
+    SetGravity(osg::Uniform* gravity) :
+_gravity(gravity)
+{ }
+
+void onValueChanged( Control* control, float value )
+{
+    _gravity->set(osg::Vec3(0.0, 0.0, value));
+}
+
+osg::Uniform* _gravity;
+};
+
+struct SetUniform: public ControlEventHandler
+{
+    SetUniform(osg::Uniform* u) :
+_uniform(u)
+{ }
+
+void onValueChanged( Control* control, float value )
+{
+    _uniform->set(value);
+}
+
+osg::Uniform* _uniform;
+};
+
+
+
+void createUI(ControlCanvas* canvas,
+              osg::Uniform* gravity,
+              osg::Uniform* diespeed)
+{   
+    Grid* grid = canvas->addControl(new Grid());
+    grid->setBackColor(0,0,0,0.5);
+    grid->setMargin( 10 );
+    grid->setPadding( 10 );
+    grid->setChildSpacing( 10 );
+    grid->setChildVertAlign( Control::ALIGN_CENTER );
+    grid->setAbsorbEvents( true );
+    grid->setVertAlign( Control::ALIGN_TOP );
+    
+    // Gravity
+    LabelControl* gravityLabel = new LabelControl( "Gravity" );      
+    gravityLabel->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 0, 1, gravityLabel );
+
+    HSliderControl* gravityAdjust = new HSliderControl( -20.0f, 20.0f, -9.8f, new SetGravity(gravity) );
+    gravityAdjust->setWidth( 125 );
+    gravityAdjust->setHeight( 12 );
+    gravityAdjust->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 1, 1, gravityAdjust );
+    grid->setControl( 2, 1, new LabelControl(gravityAdjust) );
+
+    // Die Speed
+    LabelControl* diespeedLabel = new LabelControl( "Die Speed" );      
+    diespeedLabel->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 0, 2, diespeedLabel );
+
+    float dieSpeedValue;
+    diespeed->get(dieSpeedValue);
+    HSliderControl* dieSpeedAdjust = new HSliderControl( 0.001, 30.0, dieSpeedValue, new SetUniform(diespeed) );
+    dieSpeedAdjust->setWidth( 125 );
+    dieSpeedAdjust->setHeight( 12 );
+    dieSpeedAdjust->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 1, 2, dieSpeedAdjust );
+    grid->setControl( 2, 2, new LabelControl(dieSpeedAdjust) );
+}
+
+
 
 
 int main( int argc, char **argv )
@@ -641,18 +715,17 @@ int main( int argc, char **argv )
 
     osgEarth::Random rand;
 
-    /*
-    viewer.getCamera()->setComputeNearFarMode( osg::CullSettings::DO_NOT_COMPUTE_NEAR_FAR );
-    double fov, ar, n, f;
-    viewer.getCamera()->getProjectionMatrixAsPerspective(fov, ar, n, f);
-    viewer.getCamera()->setProjectionMatrixAsPerspective(fov, ar, 0.1, 50000.0f); 
-    */
-
     osg::Uniform* flipRatio = new osg::Uniform("flipRatio", 0.0f);
     ss->addUniform(flipRatio);
 
     osg::Uniform* dieSpeed = new osg::Uniform("dieSpeed", 10.0f);
     computeNode->getStateSet()->addUniform(dieSpeed);
+
+    ControlCanvas* canvas = ControlCanvas::getOrCreate( &viewer );
+    createUI( canvas,
+              gravity,
+              dieSpeed);
+
     
     while (!viewer.done())
     {
