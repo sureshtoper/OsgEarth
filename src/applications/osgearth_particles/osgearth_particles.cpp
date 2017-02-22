@@ -504,23 +504,17 @@ createStateSet()
             "vec4 worldPosition = modelMatrix * vec4( pos, 1.0 );\n"
             "vec4 mvPosition = osg_ViewMatrix * worldPosition;\n"            
 
-            //"vec4 pos = gl_Vertex + vec4(posInfo.xyz, 0.0);\n"
-            
-            "float scale = 0.5 * smoothstep(0.0, 1.0, life);\n"
+            // Scale
+            "float scale = 0.1 * smoothstep(0.0, 1.0, life);\n"
 
             // With flipping.
             "mvPosition += vec4((gl_Vertex + (positionFlip - gl_Vertex) * flipRatio) * scale, 0.0);\n"       
-            //"mvPosition += (gl_Vertex * scale);\n"
-            //"mvPosition += (vec4(positionFlip, 0.0) * scale);\n"
 
             "gl_Position = gl_ProjectionMatrix * mvPosition;\n"
 
             "float alpha = clamp(life, 0.0, 1.0);\n"
             "vec3 color = mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.5, 1.0), alpha);\n"
             "gl_FrontColor =  vec4(color, 1.0);\n"
-            //"gl_FrontColor =  vec4(normalize(mvPosition.xyz), 1.0);\n"
-            //"gl_Position = gl_ProjectionMatrix * (pos + vec4(modelView[3].xyz, 0));\n"
-            //"gl_Position = gl_ModelViewProjectionMatrix * pos; \n"
         "} \n";
 
     std::string fragSource =
