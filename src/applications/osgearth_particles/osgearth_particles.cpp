@@ -484,6 +484,7 @@ createStateSet()
         "uniform mat4 osg_ViewMatrix;\n"
         "in vec3 positionFlip;\n"
         "uniform float flipRatio;\n"
+        "uniform float particleSize;\n"
 
         "uniform vec2 resolution;\n"
 
@@ -508,7 +509,7 @@ createStateSet()
             "vec4 mvPosition = osg_ViewMatrix * worldPosition;\n"            
 
             // Scale
-            "float scale = 0.1 * smoothstep(0.0, 1.0, life);\n"
+            "float scale = particleSize * smoothstep(0.0, 1.0, life);\n"
 
             // With flipping.
             "mvPosition += vec4((gl_Vertex + (positionFlip - gl_Vertex) * flipRatio) * scale, 0.0);\n"       
@@ -612,7 +613,8 @@ osg::Uniform* _uniform;
 
 void createUI(ControlCanvas* canvas,
               osg::Uniform* gravity,
-              osg::Uniform* diespeed)
+              osg::Uniform* diespeed,
+              osg::Uniform* particleSize)
 {   
     Grid* grid = canvas->addControl(new Grid());
     grid->setBackColor(0,0,0,0.5);
@@ -648,6 +650,20 @@ void createUI(ControlCanvas* canvas,
     dieSpeedAdjust->setVertAlign( Control::ALIGN_CENTER );
     grid->setControl( 1, 2, dieSpeedAdjust );
     grid->setControl( 2, 2, new LabelControl(dieSpeedAdjust) );
+
+    // Particle size
+    LabelControl* particleSizeLabel = new LabelControl( "Size" );      
+    particleSizeLabel->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 0, 3, particleSizeLabel );
+
+    float particleSizeValue;
+    particleSize->get(particleSizeValue);
+    HSliderControl* particleSizeAdjust = new HSliderControl( 0.001, 5.0, particleSizeValue, new SetUniform(particleSize) );
+    particleSizeAdjust->setWidth( 125 );
+    particleSizeAdjust->setHeight( 12 );
+    particleSizeAdjust->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 1, 3, particleSizeAdjust );
+    grid->setControl( 2, 3, new LabelControl(particleSizeAdjust) );
 }
 
 
@@ -718,13 +734,18 @@ int main( int argc, char **argv )
     osg::Uniform* flipRatio = new osg::Uniform("flipRatio", 0.0f);
     ss->addUniform(flipRatio);
 
+    osg::Uniform* particleSize = new osg::Uniform("particleSize", 0.2f);
+    ss->addUniform(particleSize);
+
     osg::Uniform* dieSpeed = new osg::Uniform("dieSpeed", 10.0f);
     computeNode->getStateSet()->addUniform(dieSpeed);
 
     ControlCanvas* canvas = ControlCanvas::getOrCreate( &viewer );
     createUI( canvas,
               gravity,
-              dieSpeed);
+              dieSpeed,
+              particleSize
+              );
 
     
     while (!viewer.done())
