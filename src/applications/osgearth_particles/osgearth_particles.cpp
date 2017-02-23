@@ -241,6 +241,8 @@ std::string computeFrag =
 
 "uniform vec3 gravity;\n"
 
+"uniform vec3 forces[2];\n"
+
 // Generate a pseudo-random value in the specified range:
 "float\n"
 "oe_random(float minValue, float maxValue, vec2 co)\n"
@@ -266,6 +268,10 @@ std::string computeFrag =
 // Gravity
 //"   velocity = velocity + vec3(0.0, 0.0, -9.8) * osg_DeltaSimulationTime;\n"
 "   velocity = velocity + gravity * osg_DeltaSimulationTime;\n"
+"   for (int i = 0; i < 2; i++){\n"
+"   velocity = velocity + forces[i] * osg_DeltaSimulationTime;\n"
+"   }\n"
+
 
 // Compute the new position based on the velocity
 "   position = position + velocity * osg_DeltaSimulationTime;\n"
@@ -278,7 +284,6 @@ std::string computeFrag =
 "   if (life < 0.0) {\n"
 "       life = oe_random(0.0, 1.0, vec2(position.x, position.y));\n"
 "       float initialVelocity = oe_random(0.5, 10.0, vec2(position.y, position.z));\n"
-
 "       float x = oe_random(-10.0, 10.0, vec2(position.z, position.y));\n"
 "       float y = oe_random(-10.0, 10.0, vec2(position.y, position.x));\n"
 "       float z = oe_random(0, 2.0, vec2(osg_SimulationTime, position.z));\n"
@@ -739,6 +744,11 @@ int main( int argc, char **argv )
 
     osg::Uniform* dieSpeed = new osg::Uniform("dieSpeed", 10.0f);
     computeNode->getStateSet()->addUniform(dieSpeed);
+
+    osg::Uniform* forces = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "forces", 2);
+    forces->setElement(0, osg::Vec3(5.0, 0.0, 0.0));
+    forces->setElement(1, osg::Vec3(0.0, 0.0, 3.0));
+    computeNode->getStateSet()->addUniform(forces);
 
     ControlCanvas* canvas = ControlCanvas::getOrCreate( &viewer );
     createUI( canvas,
