@@ -241,7 +241,20 @@ std::string computeFrag =
 
 "uniform vec3 gravity;\n"
 
+"uniform float fluidDensity;\n"
+"uniform float fluidViscosity;\n"
+"uniform float particleDensity;\n"
+"uniform float particleRadius;\n"
+
 "uniform vec3 forces[2];\n"
+
+"const float M_PI=3.1415926535897932384626433832795;"
+
+"float length2(vec2 p){\n"
+"  return dot(p, p);\n"
+"}\n"
+
+
 
 // Generate a pseudo-random value in the specified range:
 "float\n"
@@ -251,6 +264,35 @@ std::string computeFrag =
 "    return minValue + t*(maxValue-minValue);\n"
 "}\n"
 
+
+"void applyFluidFriction(float mass, float radius, vec3 acceleration, float viscosity, float density, vec3 wind, inout vec3 velocity ){\n"
+"    const float four_over_three = 4.0/3.0;\n"
+"float viscosityCoefficient = 6.0 * M_PI * viscosity;\n"
+"float densityCoefficient = 0.2 * M_PI * density;\n"
+"float Area = M_PI*radius*radius;\n"
+"float Volume = Area*radius*four_over_three;\n"
+
+// compute force due to gravity + boyancy of displacing the fluid that the particle is emersed in.
+"vec3 accel_gravity = acceleration * ((mass - density*Volume) * 1.0/mass);\n"
+
+// compute force due to friction
+"vec3 relative_wind = velocity-wind;\n"
+"vec3 wind_force = - relative_wind * Area * (viscosityCoefficient + densityCoefficient*length(relative_wind));\n"
+"vec3 wind_accel = wind_force * 1.0/mass;\n"
+
+"float compenstated_dt = osg_DeltaSimulationTime;\n"
+"float dt = osg_DeltaSimulationTime;\n"
+"if (length2(relative_wind) < dt*dt*length2(wind_accel))\n"
+"{\n"
+"float critical_dt2 = length2(relative_wind)/length2(wind_accel);\n"
+"compenstated_dt = sqrt(critical_dt2)*0.8;\n"
+"}\n"
+
+"velocity = velocity + accel_gravity*dt + wind_accel*compenstated_dt;\n"
+
+
+
+"}\n"
 
 "void main() \n"
 "{ \n"
@@ -267,10 +309,16 @@ std::string computeFrag =
 
 // Gravity
 //"   velocity = velocity + vec3(0.0, 0.0, -9.8) * osg_DeltaSimulationTime;\n"
+/*
 "   velocity = velocity + gravity * osg_DeltaSimulationTime;\n"
 "   for (int i = 0; i < 2; i++){\n"
 "   velocity = velocity + forces[i] * osg_DeltaSimulationTime;\n"
 "   }\n"
+*/
+
+"   float mass = particleDensity*particleRadius*particleRadius*particleRadius*M_PI*4.0/3.0;\n"
+
+"   applyFluidFriction(particleRadius, mass, vec3(0,0,-9.81), fluidViscosity, fluidDensity, vec3(0.0, 0.0, 0.0), velocity);\n"
 
 
 // Compute the new position based on the velocity
@@ -283,10 +331,10 @@ std::string computeFrag =
 // Reset particle
 "   if (life < 0.0) {\n"
 "       life = oe_random(0.0, 1.0, vec2(position.x, position.y));\n"
-"       float initialVelocity = oe_random(0.5, 10.0, vec2(position.y, position.z));\n"
+"       float initialVelocity = 0.0;\n"//oe_random(0.5, 1.0, vec2(position.y, position.z));\n"
 "       float x = oe_random(-10.0, 10.0, vec2(position.z, position.y));\n"
 "       float y = oe_random(-10.0, 10.0, vec2(position.y, position.x));\n"
-"       float z = oe_random(0, 2.0, vec2(osg_SimulationTime, position.z));\n"
+"       float z = 1.0;\n"//oe_random(0, 2.0, vec2(osg_SimulationTime, position.z));\n"
 "       velocity = initialVelocity * normalize(vec3(x, y, z));\n"
 //"       velocity = vec3(0.0, 0.0, 0.0);\n"
 //"       position = vec3(0.0, 0.0, 0.0);\n"
@@ -614,12 +662,33 @@ void onValueChanged( Control* control, float value )
 osg::Uniform* _uniform;
 };
 
+void addUniformSlider( Grid* grid, unsigned int row, const std::string& name, osg::Uniform* uniform, float min, float max)
+{
+    LabelControl* label = new LabelControl( name );      
+    label->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 0, row, label );
+
+    float value;
+    uniform->get(value);
+    HSliderControl* slider = new HSliderControl( min, max, value, new SetUniform(uniform) );
+    slider->setWidth( 125 );
+    slider->setHeight( 12 );
+    slider->setVertAlign( Control::ALIGN_CENTER );
+    grid->setControl( 1, row, slider );
+    grid->setControl( 2, row, new LabelControl(slider) );
+}
+
 
 
 void createUI(ControlCanvas* canvas,
               osg::Uniform* gravity,
               osg::Uniform* diespeed,
-              osg::Uniform* particleSize)
+              osg::Uniform* particleSize,
+              osg::Uniform* fluidViscosity,
+              osg::Uniform* fluidDensity,
+              osg::Uniform* particleRadius,
+              osg::Uniform* particleDensity              
+              )
 {   
     Grid* grid = canvas->addControl(new Grid());
     grid->setBackColor(0,0,0,0.5);
@@ -629,46 +698,27 @@ void createUI(ControlCanvas* canvas,
     grid->setChildVertAlign( Control::ALIGN_CENTER );
     grid->setAbsorbEvents( true );
     grid->setVertAlign( Control::ALIGN_TOP );
+
+    unsigned int row = 0;
     
     // Gravity
     LabelControl* gravityLabel = new LabelControl( "Gravity" );      
     gravityLabel->setVertAlign( Control::ALIGN_CENTER );
-    grid->setControl( 0, 1, gravityLabel );
+    grid->setControl( 0, row, gravityLabel );
 
     HSliderControl* gravityAdjust = new HSliderControl( -20.0f, 20.0f, -9.8f, new SetGravity(gravity) );
     gravityAdjust->setWidth( 125 );
     gravityAdjust->setHeight( 12 );
     gravityAdjust->setVertAlign( Control::ALIGN_CENTER );
-    grid->setControl( 1, 1, gravityAdjust );
-    grid->setControl( 2, 1, new LabelControl(gravityAdjust) );
+    grid->setControl( 1, row, gravityAdjust );
+    grid->setControl( 2, row, new LabelControl(gravityAdjust) );
 
-    // Die Speed
-    LabelControl* diespeedLabel = new LabelControl( "Die Speed" );      
-    diespeedLabel->setVertAlign( Control::ALIGN_CENTER );
-    grid->setControl( 0, 2, diespeedLabel );
-
-    float dieSpeedValue;
-    diespeed->get(dieSpeedValue);
-    HSliderControl* dieSpeedAdjust = new HSliderControl( 0.001, 30.0, dieSpeedValue, new SetUniform(diespeed) );
-    dieSpeedAdjust->setWidth( 125 );
-    dieSpeedAdjust->setHeight( 12 );
-    dieSpeedAdjust->setVertAlign( Control::ALIGN_CENTER );
-    grid->setControl( 1, 2, dieSpeedAdjust );
-    grid->setControl( 2, 2, new LabelControl(dieSpeedAdjust) );
-
-    // Particle size
-    LabelControl* particleSizeLabel = new LabelControl( "Size" );      
-    particleSizeLabel->setVertAlign( Control::ALIGN_CENTER );
-    grid->setControl( 0, 3, particleSizeLabel );
-
-    float particleSizeValue;
-    particleSize->get(particleSizeValue);
-    HSliderControl* particleSizeAdjust = new HSliderControl( 0.001, 5.0, particleSizeValue, new SetUniform(particleSize) );
-    particleSizeAdjust->setWidth( 125 );
-    particleSizeAdjust->setHeight( 12 );
-    particleSizeAdjust->setVertAlign( Control::ALIGN_CENTER );
-    grid->setControl( 1, 3, particleSizeAdjust );
-    grid->setControl( 2, 3, new LabelControl(particleSizeAdjust) );
+    addUniformSlider(grid, row++, "Die Speed", diespeed, 0.001, 30.0);
+    addUniformSlider(grid, row++, "Size", particleSize, 0.001, 5.0);
+    addUniformSlider(grid, row++, "Fluid Viscosity", fluidViscosity, 0.001, 50.0);
+    addUniformSlider(grid, row++, "Fluid Density", fluidDensity, 0.001, 50.0);
+    addUniformSlider(grid, row++, "Particle Radius", particleRadius, 0.001, 4.0);
+    addUniformSlider(grid, row++, "Particle Density", particleDensity, 0.001, 4.0 );
 }
 
 
@@ -745,6 +795,19 @@ int main( int argc, char **argv )
     osg::Uniform* dieSpeed = new osg::Uniform("dieSpeed", 10.0f);
     computeNode->getStateSet()->addUniform(dieSpeed);
 
+    osg::Uniform* fluidViscosity = new osg::Uniform("fluidViscosity",  0.000018f);
+    computeNode->getStateSet()->addUniform(fluidViscosity);
+
+    osg::Uniform* fluidDensity = new osg::Uniform("fluidDensity", 1.2929f);
+    computeNode->getStateSet()->addUniform(fluidViscosity);
+
+    osg::Uniform* particleDensity = new osg::Uniform("particleDensity", 0.5f);
+    computeNode->getStateSet()->addUniform(particleDensity);
+
+    osg::Uniform* particleRadius = new osg::Uniform("particleRadius", 0.25f);
+    computeNode->getStateSet()->addUniform(particleRadius);
+    
+
     osg::Uniform* forces = new osg::Uniform(osg::Uniform::FLOAT_VEC3, "forces", 2);
     forces->setElement(0, osg::Vec3(5.0, 0.0, 0.0));
     forces->setElement(1, osg::Vec3(0.0, 0.0, 3.0));
@@ -754,7 +817,11 @@ int main( int argc, char **argv )
     createUI( canvas,
               gravity,
               dieSpeed,
-              particleSize
+              particleSize,
+              fluidViscosity,
+              fluidDensity,
+              particleRadius,
+              particleDensity
               );
 
     
