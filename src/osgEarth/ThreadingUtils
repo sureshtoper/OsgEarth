@@ -26,6 +26,7 @@
 #include <osg/ref_ptr>
 #include <set>
 #include <map>
+#include <functional>
 
 #define USE_CUSTOM_READ_WRITE_LOCK 1
 //#ifdef _DEBUG
@@ -198,14 +199,40 @@ namespace osgEarth { namespace Threading
     class Promise
     {
     public:
+        Promise()
+        {
+        } 
+
+        Promise(std::function< void(T*) > then):
+        _then(then)
+        {
+        }
+
+        Promise( const Promise& rhs ):
+        _future(rhs._future),
+        _then(rhs._then)
+        {
+        }
+
         const Future<T>& getFuture() const { return _future; }
 
         void resolve(T* value) {
             _future._objRef->_obj = value;
             _future._ev->set();
+            if (_then)
+            {
+                _then(value);
+            }
         }
+
+        bool isCancelled() {
+            // If the reference count is <= 1 and there is no then callback, then this Promise doesn't need to be ran.
+            return _future._objRef.get()->referenceCount() <= 1 && !_then;
+        }
+
     private:
         Future<T> _future;
+        std::function< void(T*) > _then;
     };
 
     /**
