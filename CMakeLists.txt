@@ -8,8 +8,8 @@ if(COMMAND cmake_policy)
     # Works around warnings about escaped quotes in ADD_DEFINITIONS
     # statements.
     cmake_policy(SET CMP0005 OLD)
-    
-    
+
+
     IF(COMMAND cmake_policy)
             IF(${CMAKE_MAJOR_VERSION} GREATER 2)
                 # Qt5 qt5_use_modules usage was causing "Policy CMP0043 is not set: Ignore COMPILE_DEFINITIONS_<Config> properties." warnings
@@ -72,12 +72,12 @@ ENDIF (OSGEARTH_EMBED_GIT_SHA)
 
 # IPHONE_PORT@tom
 # Trying to get CMake to generate an XCode IPhone project, current efforts are to get iphoneos sdk 3.1 working
-# Added option which needs manually setting to select the IPhone SDK for building. We can only have one of the below 
+# Added option which needs manually setting to select the IPhone SDK for building. We can only have one of the below
 # set to true. Should realy have an OSG_BUILD_PLATFORM variable that we set to our desired platform
 OPTION(OSG_BUILD_PLATFORM_IPHONE "Enable IPhoneSDK Device support" OFF)
 OPTION(OSG_BUILD_PLATFORM_IPHONE_SIMULATOR "Enable IPhoneSDK Simulator support" OFF)
 IF(OSG_BUILD_PLATFORM_IPHONE OR OSG_BUILD_PLATFORM_IPHONE_SIMULATOR)
-  
+
   #you need to manually set the default sdk version here
   SET (IPHONE_SDKVER "6.1")
   #the below is taken from ogre, it states the gcc stuff needs to happen before PROJECT() is called. I've no clue if we even need it
@@ -332,6 +332,8 @@ OPTION(BUILD_OSGEARTH_EXAMPLES "Enable to build osgEarth Examples" ON)
 
 INCLUDE(OsgEarthMacroUtils)
 
+use_cxx11()
+
 DETECT_OSG_VERSION()
 
 SET(OPENSCENEGRAPH_VERSION ${OPENSCENEGRAPH_MAJOR_VERSION}.${OPENSCENEGRAPH_MINOR_VERSION}.${OPENSCENEGRAPH_PATCH_VERSION})
@@ -448,5 +450,5 @@ SET(CPACK_PACKAGE_VERSION_MINOR ${OSGEARTH_MINOR_VERSION} )
 SET(CPACK_PACKAGE_VERSION_PATCH ${OSGEARTH_PATCH_VERSION} )
 SET(CPACK_RESOURCE_FILE_LICENSE ${PROJECT_SOURCE_DIR}/LICENSE.txt )
 SET(CPACK_MONOLITHIC_INSTALL    1 )                                        # create a single, monolithic package.
-    
+
 INCLUDE(CPack)
