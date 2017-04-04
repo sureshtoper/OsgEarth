@@ -44,6 +44,16 @@ namespace osgEarth
         /** Submit a collection of objects for release. */
         void push(const ObjectList& nodes);
 
+        virtual const char* className() const
+        {
+            return "ResourceReleaser";
+        }
+
+        virtual const char* libraryName() const
+        {
+            return "osgEarth::Drivers::RexTerrainEngine";
+        }
+
     public: // osg::Drawable
 
         /** Calls releaseGLObjects() on all objects in the list, then clears the list. */

@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  */
 #include "DrawTileCommand"
+#include <strstream>
 
 using namespace osgEarth::Drivers::RexTerrainEngine;
 
@@ -29,6 +30,13 @@ DrawTileCommand::draw(osg::RenderInfo& ri, DrawState& dsMaster, osg::Referenced*
     PerContextDrawState& ds = dsMaster.getPCDS(ri.getContextID());
 
     osg::State& state = *ri.getState();
+
+    osg::GLExtensions* ext = state.get<osg::GLExtensions>();
+    std::stringstream buf;
+    buf << "osgEarth::Drivers::RexTerrainEngine::DrawTileCommand::draw key=" << _key.str();
+    std::string debugGroup = buf.str();
+
+    ext->glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, debugGroup.length(), debugGroup.c_str());
 
     //OE_INFO << LC << "      TILE: " << _geom << std::endl;
         
@@ -179,5 +187,7 @@ DrawTileCommand::draw(osg::RenderInfo& ri, DrawState& dsMaster, osg::Referenced*
             }
         }
 #endif
+
+        ext->glPopDebugGroup();
     }    
 }

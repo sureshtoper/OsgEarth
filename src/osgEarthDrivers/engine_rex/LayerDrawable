@@ -40,6 +40,16 @@ namespace osgEarth { namespace Drivers { namespace RexTerrainEngine
     public:
         LayerDrawable();
 
+        virtual const char* className() const
+        {
+            return "LayerDrawable";
+        }
+
+        virtual const char* libraryName() const
+        {
+            return "osgEarth::Drivers::RexTerrainEngine";
+        }
+
         // The (sorted) list of tiles to render for this layer
         DrawTileCommands  _tiles;
 

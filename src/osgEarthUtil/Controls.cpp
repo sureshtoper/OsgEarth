@@ -705,8 +705,14 @@ namespace
     struct LabelText : public osgText::Text
     {
         LabelText() : osgText::Text() { setDataVariance(osg::Object::DYNAMIC); }
-        const osg::BoundingBox& getTextBB() const { return _textBB; }
-        const osg::Matrix& getATMatrix(int contextID) const { return _autoTransformCache[contextID]._matrix; }
+        const osg::BoundingBox& getTextBB() const { return _textBB; }        
+        const osg::Matrix& getATMatrix(int contextID) const { 
+        #if OSG_MIN_VERSION_REQUIRED(3,5,6)
+                return _matrix;
+        #else
+                return _autoTransformCache[contextID]._matrix;
+        #endif
+        }
     };
 
     // writes a value to a label
