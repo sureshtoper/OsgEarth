@@ -81,7 +81,7 @@ TrackNode::init( const TrackNodeFieldSchema& schema )
     if ( icon && image )
     {
         // apply the image icon.
-        osg::Geometry* imageGeom = AnnotationUtils::createImageGeometry( 
+        osg::Geometry* imageGeom = AnnotationUtils::createOrUpdateImageGeometry( 
             image,                    // image
             osg::Vec2s(0,0),          // offset
             0,                        // tex image unit

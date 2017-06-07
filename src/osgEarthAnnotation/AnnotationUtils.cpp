@@ -269,11 +269,12 @@ AnnotationUtils::createTextDrawable(const std::string& text,
 }
 
 osg::Geometry*
-AnnotationUtils::createImageGeometry(osg::Image*       image,
-                                     const osg::Vec2s& pixelOffset,
-                                     unsigned          textureUnit,
-                                     double            heading,
-                                     double            scale)
+AnnotationUtils::createOrUpdateImageGeometry(osg::Image*       image,
+                                             const osg::Vec2s& pixelOffset,
+                                             unsigned          textureUnit,
+                                             double            heading,
+                                             double            scale,
+                                             osg::Geometry*    geometry)
 {
     if ( !image )
         return 0L;
@@ -284,28 +285,49 @@ AnnotationUtils::createImageGeometry(osg::Image*       image,
     texture->setResizeNonPowerOfTwoHint(false);
     texture->setImage( image );
 
+    // set up the geoset.
+    osg::Geometry* geom = geometry;
+    if (!geom)
+    {
+        geom = new osg::Geometry();
+        geom->setUseVertexBufferObjects(true);
+        geom->setUseDisplayList(false);
+        
+        osg::Vec2Array* tcoords = new osg::Vec2Array(4);
+        (*tcoords)[0].set(0, 0);
+        (*tcoords)[1].set(1, 0);
+        (*tcoords)[2].set(1, 1);
+        (*tcoords)[3].set(0, 1);
+        geom->setTexCoordArray(textureUnit,tcoords);
+
+        geom->setVertexArray(new osg::Vec3Array(4));
+
+        osg::Vec4Array* colors = new osg::Vec4Array(1);
+        (*colors)[0].set(1.0f,1.0f,1.0,1.0f);
+        geom->setColorArray(colors);
+        geom->setColorBinding(osg::Geometry::BIND_OVERALL);    
+
+        GLushort indices[] = {0,1,2,0,2,3};
+        geom->addPrimitiveSet( new osg::DrawElementsUShort( GL_TRIANGLES, 6, indices ) );
+    }    
     // set up the decoration.
-    osg::StateSet* dstate = new osg::StateSet;
+    osg::StateSet* dstate = geom->getOrCreateStateSet();
     dstate->setMode(GL_CULL_FACE,osg::StateAttribute::OFF);
     dstate->setMode(GL_LIGHTING,osg::StateAttribute::OFF);
     dstate->setTextureAttributeAndModes(0, texture,osg::StateAttribute::ON);
-
-    // set up the geoset.
-    osg::Geometry* geom = new osg::Geometry();
-    geom->setUseVertexBufferObjects(true);
-    geom->setStateSet(dstate);
-
+    
     float s = scale * image->s();
     float t = scale * image->t();
 
     float x0 = (float)pixelOffset.x() - s/2.0;
     float y0 = (float)pixelOffset.y() - t/2.0;
 
-    osg::Vec3Array* verts = new osg::Vec3Array(4);
+    osg::Vec3Array* verts = static_cast<osg::Vec3Array*>(geom->getVertexArray());
     (*verts)[0].set( x0,     y0,     0 );
     (*verts)[1].set( x0 + s, y0,     0 );
     (*verts)[2].set( x0 + s, y0 + t, 0 );
     (*verts)[3].set( x0,     y0 + t, 0 );
+    verts->dirty();
 
     if (heading != 0.0)
     {
@@ -317,21 +339,6 @@ AnnotationUtils::createImageGeometry(osg::Image*       image,
         }
     }
     geom->setVertexArray(verts);
-
-    osg::Vec2Array* tcoords = new osg::Vec2Array(4);
-    (*tcoords)[0].set(0, 0);
-    (*tcoords)[1].set(1, 0);
-    (*tcoords)[2].set(1, 1);
-    (*tcoords)[3].set(0, 1);
-    geom->setTexCoordArray(textureUnit,tcoords);
-
-    osg::Vec4Array* colors = new osg::Vec4Array(1);
-    (*colors)[0].set(1.0f,1.0f,1.0,1.0f);
-    geom->setColorArray(colors);
-    geom->setColorBinding(osg::Geometry::BIND_OVERALL);
-
-    GLushort indices[] = {0,1,2,0,2,3};
-    geom->addPrimitiveSet( new osg::DrawElementsUShort( GL_TRIANGLES, 6, indices ) );
 
     return geom;
 }

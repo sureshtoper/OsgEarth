@@ -45,7 +45,9 @@ using namespace osgEarth::Symbology;
 
 PlaceNode::PlaceNode() :
 _labelRotationRad ( 0. ),
-_followFixedCourse( false )
+_followFixedCourse( false ),
+_geode( 0L ),
+_imageGeometry(0)
 {
     //nop
 }
@@ -61,6 +63,7 @@ _image   ( image ),
 _text    ( text ),
 _style   ( style ),
 _geode            ( 0L ),
+_imageGeometry    ( 0L ),
 _labelRotationRad ( 0. ),
 _followFixedCourse( false )
 {
@@ -77,6 +80,7 @@ GeoPositionNode( mapNode ),
 _text    ( text ),
 _style   ( style ),
 _geode            ( 0L ),
+_imageGeometry    ( 0L ),
 _labelRotationRad ( 0. ),
 _followFixedCourse( false )
 {
@@ -92,7 +96,9 @@ GeoPositionNode ( mapNode ),
 _style    ( style ),
 _dbOptions        ( dbOptions ),
 _labelRotationRad ( 0. ),
-_followFixedCourse( false )
+_followFixedCourse( false ),
+_geode( 0L ),
+_imageGeometry    ( 0L )
 {
     init();
     setPosition(position);
@@ -102,7 +108,6 @@ void
 PlaceNode::init()
 {
     ScreenSpaceLayout::activate( this->getOrCreateStateSet() );
-
     osgEarth::clearChildren( getPositionAttitudeTransform() );
 
     _geode = new osg::Geode();
@@ -187,7 +192,7 @@ PlaceNode::init()
         // this offset anchors the image at the bottom
         osg::Vec2s offset;
         if ( !icon || !icon->alignment().isSet() )
-        {	
+        {
             // default to bottom center
             offset.set(0.0, t / 2.0);
         }
@@ -233,14 +238,14 @@ PlaceNode::init()
             heading = osg::DegreesToRadians( icon->heading()->eval() );
         }
 
-        //We must actually rotate the geometry itself and not use a MatrixTransform b/c the 
+        //We must actually rotate the geometry itself and not use a MatrixTransform b/c the
         //decluttering doesn't respect Transforms above the drawable.
-        osg::Geometry* imageGeom = AnnotationUtils::createImageGeometry( _image.get(), offset, 0, heading, scale );
-        if ( imageGeom )
+        _imageGeometry = AnnotationUtils::createOrUpdateImageGeometry( _image.get(), offset, 0, heading, scale, _imageGeometry );
+        if ( _imageGeometry)
         {
-            _geode->addDrawable( imageGeom );
-            imageBox = osgEarth::Utils::getBoundingBox( imageGeom );
-        }    
+            _geode->addDrawable( _imageGeometry );
+            imageBox = osgEarth::Utils::getBoundingBox( _imageGeometry );
+        }
     }
 
     if ( _image.valid() )
@@ -266,18 +271,18 @@ PlaceNode::init()
     {
         _geode->addDrawable( text );
     }
-    
+
     osg::StateSet* stateSet = _geode->getOrCreateStateSet();
     stateSet->setAttributeAndModes( new osg::Depth(osg::Depth::ALWAYS, 0, 1, false), 1 );
 
     getPositionAttitudeTransform()->addChild( _geode );
 
-    // for clamping and occlusion culling    
+    // for clamping and occlusion culling
     //OE_WARN << LC << "PlaceNode::applyStyle: " << _style.getConfig().toJSON(true) << std::endl;
     applyStyle( _style );
 
     setLightingIfNotSet( false );
-    
+
     // generate shaders:
     Registry::shaderGenerator().run(
         this,
@@ -288,7 +293,6 @@ PlaceNode::init()
 
     if ( _dynamic )
         setDynamic( _dynamic );
-
     updateLayoutData();
 }
 
@@ -320,8 +324,8 @@ PlaceNode::updateLayoutData()
         _geode->getDrawable(i)->setUserData(_dataLayout.get());
     }
 
-    _dataLayout->setPriority(getPriority());    
-    
+    _dataLayout->setPriority(getPriority());
+
     GeoPoint location = getPosition();
     location.makeGeographic();
     double latRad;
@@ -350,7 +354,7 @@ PlaceNode::updateLayoutData()
     if (ts)
     {
         _dataLayout->setPixelOffset(ts->pixelOffset().get());
-        
+
         if (_followFixedCourse)
         {
             osg::Vec3d p0, p1;
@@ -391,7 +395,6 @@ PlaceNode::setText( const std::string& text )
     }
 }
 
-
 void
 PlaceNode::setStyle(const Style& style)
 {
@@ -400,24 +403,53 @@ PlaceNode::setStyle(const Style& style)
     init();
 }
 
-
 void
 PlaceNode::setIconImage(osg::Image* image)
 {
     // changing the icon requires a complete rebuild.
-    _image = image;
-    init();
-}
+    if (_image != image)
+    {
+        _image = image;
 
+        if (_imageGeometry)
+        {
+            osg::Texture2D* texture = new osg::Texture2D();
+            texture->setFilter(osg::Texture::MIN_FILTER,osg::Texture::LINEAR_MIPMAP_LINEAR);
+            texture->setFilter(osg::Texture::MAG_FILTER,osg::Texture::LINEAR);
+            texture->setResizeNonPowerOfTwoHint(false);
+            texture->setImage( _image );
+
+            float scale = 1.0;
+
+            float s = scale * image->s();
+            float t = scale * image->t();
+
+            float x0 = -s/2.0;
+            float y0 = -t/2.0;
+
+            osg::Vec3Array* verts = static_cast<osg::Vec3Array*>(_imageGeometry->getVertexArray());
+            (*verts)[0].set( x0,     y0,     0 );
+            (*verts)[1].set( x0 + s, y0,     0 );
+            (*verts)[2].set( x0 + s, y0 + t, 0 );
+            (*verts)[3].set( x0,     y0 + t, 0 );
+            verts->dirty();
+            _imageGeometry->getOrCreateStateSet()->setTextureAttribute(0, texture);
+        }
+        else
+        {
+            init();
+        }
+    }
+}
 
 void
 PlaceNode::setDynamic( bool value )
 {
     GeoPositionNode::setDynamic( value );
-    
+
     for(unsigned i=0; i<_geode->getNumDrawables(); ++i)
     {
-        _geode->getDrawable(i)->setDataVariance( 
+        _geode->getDrawable(i)->setDataVariance(
             value ? osg::Object::DYNAMIC : osg::Object::STATIC );
     }
 }
@@ -425,7 +457,6 @@ PlaceNode::setDynamic( bool value )
 //-------------------------------------------------------------------
 
 OSGEARTH_REGISTER_ANNOTATION( place, osgEarth::Annotation::PlaceNode );
-
 
 PlaceNode::PlaceNode(MapNode*              mapNode,
                      const Config&         conf,
@@ -486,7 +517,6 @@ PlaceNode::getConfig() const
 
     return conf;
 }
-
 
 #undef  LC
 #define LC "[PlaceNode Serializer] "
