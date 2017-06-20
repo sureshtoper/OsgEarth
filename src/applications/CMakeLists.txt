@@ -98,6 +98,7 @@ IF(BUILD_OSGEARTH_EXAMPLES)
     ADD_SUBDIRECTORY(osgearth_infinitescroll)
     ADD_SUBDIRECTORY(osgearth_video)
     ADD_SUBDIRECTORY(osgearth_splat)
+    ADD_SUBDIRECTORY(osgearth_billboards)
 
     IF (Qt5Widgets_FOUND OR QT4_FOUND AND NOT ANDROID AND OSGEARTH_USE_QT)
         ADD_SUBDIRECTORY(osgearth_qt_simple)
